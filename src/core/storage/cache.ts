@@ -1,9 +1,8 @@
 import type { UserProfile, Prompt, PromptMetadata, SavedSearch } from '@/shared/types/prompt';
-import { getProtocolVersion } from '@/backend/config/arweave';
 
-// Get protocol version for versioned storage keys
+// Protocol version for versioned storage keys (inlined from arweave config)
 // This ensures cache is isolated per protocol version
-const PROTOCOL_VERSION = getProtocolVersion().toLowerCase().replace(/[^a-z0-9]/g, ''); // e.g., "pocketpromptv34"
+const PROTOCOL_VERSION = 'pocketpromptv35'; // Pocket-Prompt-v3.5 normalized
 
 const STORAGE_KEYS = {
   PROFILE: `pktpmt_${PROTOCOL_VERSION}_profile`,

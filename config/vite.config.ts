@@ -7,6 +7,9 @@ import typescript from 'typescript'
 
 // https://vite.dev/config/
 export default defineConfig({
+  css: {
+    postcss: './config/postcss.config.js',
+  },
   plugins: [
     react(),
     nodePolyfills({
@@ -22,8 +25,8 @@ export default defineConfig({
       apply: 'build',
       writeBundle() {
         // Copy service worker to dist after build
-        const srcPath = path.resolve(__dirname, 'src/sw.ts');
-        const destPath = path.resolve(__dirname, 'dist/sw.js');
+        const srcPath = path.resolve(__dirname, '../src/sw.ts');
+        const destPath = path.resolve(__dirname, '../dist/sw.js');
 
         // Compile TypeScript service worker
         const source = fs.readFileSync(srcPath, 'utf8');
@@ -41,8 +44,8 @@ export default defineConfig({
   ],
   resolve: {
     alias: {
-      '@': path.resolve(__dirname, './src'),
-      'fs': path.resolve(__dirname, './src/shared/polyfills/fs.ts'),
+      '@': path.resolve(__dirname, '../src'),
+      'fs': path.resolve(__dirname, '../src/shared/polyfills/fs.ts'),
     },
   },
   optimizeDeps: {

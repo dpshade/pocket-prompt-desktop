@@ -3,7 +3,7 @@
  * Loads tag configuration from arweave.config.json
  */
 
-import arweaveConfig from '../../../arweave.config.json';
+import arweaveConfig from '../../../config/arweave.config.json';
 import type { Prompt } from '@/shared/types/prompt';
 
 interface ArweaveTag {

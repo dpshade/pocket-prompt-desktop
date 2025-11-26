@@ -312,6 +312,46 @@ export async function getVersionHistory(promptId: string): Promise<PromptVersion
 }
 
 /**
+ * Get version content by version ID (txId)
+ */
+export async function getVersionContent(versionId: string): Promise<string | null> {
+  const rows = await executeQuery<TursoVersionRow>(
+    'SELECT content FROM prompt_versions WHERE id = ?',
+    [versionId]
+  );
+
+  if (rows.length === 0) return null;
+  return rows[0].content;
+}
+
+/**
+ * Get full version data (content included) for a prompt
+ */
+export async function getVersionWithContent(promptId: string, versionNumber: number): Promise<{
+  id: string;
+  version: number;
+  content: string;
+  changeNote: string | null;
+  createdAt: number;
+} | null> {
+  const rows = await executeQuery<TursoVersionRow>(
+    'SELECT * FROM prompt_versions WHERE prompt_id = ? AND version = ?',
+    [promptId, versionNumber]
+  );
+
+  if (rows.length === 0) return null;
+
+  const row = rows[0];
+  return {
+    id: row.id,
+    version: row.version,
+    content: row.content,
+    changeNote: row.change_note,
+    createdAt: row.created_at,
+  };
+}
+
+/**
  * Create a new version entry
  */
 async function createVersion(

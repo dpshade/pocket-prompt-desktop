@@ -6,7 +6,7 @@ import { SavedSearchesDialog } from '@/frontend/components/search/SavedSearchesD
 import { usePrompts } from '@/frontend/hooks/usePrompts';
 import { getAllTags } from '@/core/search';
 import { expressionToString, parseBooleanExpression } from '@/core/search/boolean';
-import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback, startTransition } from 'react';
+import { useState, useEffect, useRef, forwardRef, useImperativeHandle, useCallback, startTransition, useMemo } from 'react';
 import type { BooleanExpression, SavedSearch } from '@/shared/types/prompt';
 import type { UseCollectionsReturn } from '@/frontend/hooks/useCollections';
 import { BooleanBuilder } from '@/frontend/components/search/BooleanBuilder';
@@ -42,7 +42,8 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
     loadSavedSearch,
     clearBooleanSearch,
   } = usePrompts();
-  const [allTags, setAllTags] = useState<string[]>([]);
+  // Memoize allTags to avoid recalculating on every render
+  const allTags = useMemo(() => getAllTags(prompts), [prompts]);
   const [showTagSuggestions, setShowTagSuggestions] = useState(false);
   const [showBooleanBuilder, setShowBooleanBuilder] = useState(false);
   const [expressionText, setExpressionText] = useState('');
@@ -53,8 +54,16 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
   // Local input state for instant feedback, debounced to global store
   const [inputValue, setInputValue] = useState(searchQuery);
 
-  // Sync input value when searchQuery changes externally (e.g., from saved search)
+  // Track if we're the source of the change to avoid redundant sync
+  const isInternalChange = useRef(false);
+
+  // Sync input value when searchQuery changes EXTERNALLY (e.g., from saved search)
+  // Skip sync if we caused the change ourselves (avoids redundant render)
   useEffect(() => {
+    if (isInternalChange.current) {
+      isInternalChange.current = false;
+      return;
+    }
     setInputValue(searchQuery);
   }, [searchQuery]);
 
@@ -67,27 +76,37 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
       // Use startTransition to mark this as a non-urgent update
       // This allows React to yield to more urgent updates (like typing)
       startTransition(() => {
+        isInternalChange.current = true;
         setSearchQuery(value);
       });
-    }, 30); // 30ms debounce with startTransition for instant-feeling search
+    }, 50); // 50ms debounce - balances responsiveness with CPU breathing room
   }, [setSearchQuery]);
 
-  // Handle input change with debouncing
+  // Handle input change with debouncing (except for clearing)
   const handleInputChange = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
     setInputValue(value); // Instant local update
-    debouncedSetSearchQuery(value); // Debounced global update
-  }, [debouncedSetSearchQuery]);
 
-  // Clear input
+    // If cleared (e.g., backspace to empty), skip debounce for instant response
+    if (!value) {
+      if (debounceRef.current) {
+        clearTimeout(debounceRef.current);
+      }
+      isInternalChange.current = true;
+      setSearchQuery('');
+    } else {
+      debouncedSetSearchQuery(value); // Debounced global update
+    }
+  }, [debouncedSetSearchQuery, setSearchQuery]);
+
+  // Clear input - immediate (no startTransition) since empty query = no search work
   const handleClearInput = useCallback(() => {
     setInputValue('');
     if (debounceRef.current) {
       clearTimeout(debounceRef.current);
     }
-    startTransition(() => {
-      setSearchQuery('');
-    });
+    isInternalChange.current = true;
+    setSearchQuery(''); // Synchronous - clearing is cheap, no search computation
   }, [setSearchQuery]);
 
   // Inline autocomplete state
@@ -103,10 +122,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
     }
   }));
 
-  useEffect(() => {
-    const tags = getAllTags(prompts);
-    setAllTags(tags);
-  }, [prompts]);
 
   // Auto-focus search bar on mount
   useEffect(() => {
@@ -160,6 +175,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
     const newQuery = inputValue + inlineSuggestion + ' ';
     setInputValue(newQuery);
+    isInternalChange.current = true;
     setSearchQuery(newQuery);
     setInlineSuggestion('');
 
@@ -219,8 +235,8 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
     setShowBooleanBuilder(false);
   };
 
-  const tagLabel = allTags.length === 1 ? 'tag' : 'tags';
-  const duplicateCount = getDuplicateCount(prompts);
+  // Memoize duplicateCount - getDuplicateCount calls findDuplicates which is O(n²)
+  const duplicateCount = useMemo(() => getDuplicateCount(prompts), [prompts]);
 
   return (
     <>
@@ -293,7 +309,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
               }}
             >
               <div className="font-medium text-foreground transition-colors hover:text-primary text-[13px] sm:text-xs pl-2">
-                {showTagSuggestions ? 'Hide tag filters' : 'Show tag filters'} ({allTags.length} {tagLabel})
+                {showTagSuggestions ? 'Hide tag filters' : 'Show tag filters'} ({allTags.length} {allTags.length === 1 ? 'tag' : 'tags'})
               </div>
               <div className="flex items-center gap-2.5 sm:gap-2" onClick={(e) => e.stopPropagation()}>
                 <Button

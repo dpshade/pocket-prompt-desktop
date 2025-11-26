@@ -1,5 +1,5 @@
-import { useEffect, useState, useCallback, useRef, useMemo } from 'react';
-import { Plus, Archive as ArchiveIcon, Upload, Copy } from 'lucide-react';
+import { useEffect, useState, useCallback, useRef, useMemo, useDeferredValue } from 'react';
+import { Plus, Archive as ArchiveIcon, Download, Copy } from 'lucide-react';
 import { WalletButton } from '@/frontend/components/wallet/WalletButton';
 import { SearchBar, type SearchBarHandle } from '@/frontend/components/search/SearchBar';
 import { PromptCard } from '@/frontend/components/prompts/PromptCard';
@@ -12,11 +12,10 @@ import { MobileMenu } from '@/frontend/components/shared/MobileMenu';
 import { PasswordPrompt } from '@/frontend/components/wallet/PasswordPrompt';
 import { PasswordUnlock } from '@/frontend/components/wallet/PasswordUnlock';
 import { ThemeToggle } from '@/frontend/components/shared/ThemeToggle';
+import { HotkeysDialog } from '@/frontend/components/shared/HotkeysDialog';
 import { TeamsButton } from '@/frontend/components/waitlist/TeamsButton';
 import { TeamsWaitlistModal } from '@/frontend/components/waitlist/TeamsWaitlistModal';
 import { SyncButton } from '@/frontend/components/sync/SyncButton';
-import { MigrationDialog } from '@/frontend/components/migration/MigrationDialog';
-import { getMigrationStatus, type MigrationStatus } from '@/core/migration/arweave-to-turso';
 import { PublicPromptView } from '@/frontend/components/prompts/PublicPromptView';
 import { TursoSharedPromptView } from '@/frontend/components/prompts/TursoSharedPromptView';
 import { Button } from '@/frontend/components/ui/button';
@@ -28,7 +27,6 @@ import { usePassword } from '@/frontend/contexts/PasswordContext';
 import { FEATURE_FLAGS } from '@/shared/config/features';
 import { useInitializeTheme } from '@/frontend/hooks/useTheme';
 import { useCollections } from '@/frontend/hooks/useCollections';
-import { getArweaveWallet } from '@/backend/api/client';
 import type { Prompt, PromptVersion } from '@/shared/types/prompt';
 import { searchPrompts } from '@/core/search';
 import { evaluateExpression, expressionToString } from '@/core/search/boolean';
@@ -38,6 +36,8 @@ import type { EncryptedData } from '@/core/encryption/crypto';
 import { wasPromptEncrypted } from '@/core/encryption/crypto';
 import { findDuplicates } from '@/core/validation/duplicates';
 import { parseDeepLink, updateDeepLink, urlParamToExpression } from '@/frontend/utils/deepLinks';
+import { parseProtocolUrl, isTauri, type ProtocolLinkParams } from '@/frontend/utils/protocolLinks';
+
 
 function App() {
   useInitializeTheme();
@@ -45,9 +45,9 @@ function App() {
   // Initialize device identity for Turso mode
   const identity = useIdentity();
 
-  // Auto-initialize identity when Turso is enabled
+  // Auto-initialize identity for local-first mode
   useEffect(() => {
-    if (FEATURE_FLAGS.TURSO_ENABLED && !identity.connected && !identity.connecting) {
+    if (!identity.connected && !identity.connecting) {
       identity.initialize();
     }
   }, [identity]);
@@ -64,10 +64,10 @@ function App() {
     return params.get('share') || null;
   });
 
-  const { address, connected: walletConnected } = useWallet();
+  const { address } = useWallet();
 
-  // Use identity connection for Turso, wallet for Arweave
-  const connected = FEATURE_FLAGS.TURSO_ENABLED ? identity.connected : walletConnected;
+  // Use identity connection for local-first mode
+  const connected = identity.connected;
   const { password, setPassword, hasPassword: hasPasswordFromContext, setWalletAddress, isLoadingPassword } = usePassword();
 
   // When encryption is disabled, treat as always having password
@@ -94,29 +94,13 @@ function App() {
     loadSavedSearch,
   } = usePrompts();
 
-  // Collections management with Arweave sync
-  const arweaveWallet = getArweaveWallet();
+  // Defer searchQuery for filtering - keeps input responsive while filtering happens in background
+  // EXCEPT for clearing: when searchQuery is empty, use it directly for instant clear
+  const deferredSearchQuery = useDeferredValue(searchQuery);
+  const effectiveSearchQuery = searchQuery === '' ? '' : deferredSearchQuery;
 
-  // Collection callbacks (no-op for Turso mode)
-  const handleCollectionUploadStart = useCallback((_txId: string, _count: number) => {
-    // No-op for Turso mode
-  }, []);
-
-  const handleCollectionUploadComplete = useCallback((_txId: string) => {
-    // No-op for Turso mode
-  }, []);
-
-  const handleCollectionUploadError = useCallback((error: string) => {
-    console.error('[App] Collections upload error:', error);
-  }, []);
-
-  const collections = useCollections(
-    address,
-    arweaveWallet,
-    handleCollectionUploadStart,
-    handleCollectionUploadComplete,
-    handleCollectionUploadError
-  );
+  // Collections management (localStorage only)
+  const collections = useCollections();
 
   const [showArchived, setShowArchived] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
@@ -133,14 +117,14 @@ function App() {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const searchBarRef = useRef<SearchBarHandle>(null);
+  const desktopSearchBarContainerRef = useRef<HTMLDivElement>(null);
+  const [isSearchBarVisible, setIsSearchBarVisible] = useState(true);
   const [deepLinkInitialized, setDeepLinkInitialized] = useState(false);
   const previousIndexRef = useRef<number>(0);
   const passwordCheckDone = useRef(false);
   const [showFloatingNewButton, setShowFloatingNewButton] = useState(false);
   const [teamsWaitlistOpen, setTeamsWaitlistOpen] = useState(false);
-  const [migrationDialogOpen, setMigrationDialogOpen] = useState(false);
-  const [migrationStatus, setMigrationStatus] = useState<MigrationStatus | null>(null);
-  const migrationCheckDone = useRef(false);
+  const [hotkeysOpen, setHotkeysOpen] = useState(false);
   const newPromptButtonRef = useRef<HTMLButtonElement>(null);
 
   // Track grid columns for keyboard navigation
@@ -210,6 +194,376 @@ function App() {
 
     setDeepLinkInitialized(true);
   }, [connected, hasPassword, deepLinkInitialized, prompts, collections.collections, setSearchQuery, setBooleanExpression, loadSavedSearch]);
+
+  // Helper function to apply protocol link params (used by Tauri deep links)
+  // Use ref to avoid recreating listener when dependencies change
+  const applyProtocolLinkParamsRef = useRef<(params: ProtocolLinkParams, source?: string) => void>(() => {});
+  // Store pending deep link params when app state isn't ready yet
+  const pendingDeepLinkRef = useRef<ProtocolLinkParams | null>(null);
+  // Retry mechanism for failed deep link applications
+  const deepLinkRetryRef = useRef<{
+    attempts: number;
+    maxAttempts: number;
+    lastAttempt: number;
+    params: ProtocolLinkParams | null;
+  }>({
+    attempts: 0,
+    maxAttempts: 3,
+    lastAttempt: 0,
+    params: null
+  });
+  // Track deep link processing state for debugging
+  const deepLinkStateRef = useRef<{
+    totalReceived: number;
+    totalApplied: number;
+    totalPending: number;
+    totalFailed: number;
+    lastReceived: string | null;
+    lastApplied: string | null;
+    sources: Record<string, number>;
+  }>({
+    totalReceived: 0,
+    totalApplied: 0,
+    totalPending: 0,
+    totalFailed: 0,
+    lastReceived: null,
+    lastApplied: null,
+    sources: {}
+  });
+
+  // Actual implementation of applying deep link params
+  const actuallyApplyParams = useCallback((params: ProtocolLinkParams, source = 'unknown') => {
+    console.log('[App] Actually applying protocol link params:', params, 'source:', source);
+    console.log('[App] Current app state before applying:', {
+      connected,
+      hasPassword,
+      promptsLength: prompts.length,
+      searchQuery,
+      booleanExpression,
+      showArchived,
+      showDuplicates
+    });
+    
+    // Update tracking state
+    deepLinkStateRef.current.totalApplied++;
+    deepLinkStateRef.current.lastApplied = new Date().toISOString();
+    deepLinkStateRef.current.sources[source] = (deepLinkStateRef.current.sources[source] || 0) + 1;
+    
+    console.log('[App] Deep link state updated:', deepLinkStateRef.current);
+    
+    try {
+
+    switch (params.type) {
+      case 'prompt':
+        if (params.id) {
+          const prompt = prompts.find(p => p.id === params.id);
+          if (prompt) {
+            setSelectedPrompt(prompt);
+            setViewDialogOpen(true);
+          }
+          if (params.archived) setShowArchived(true);
+        }
+        break;
+
+      case 'collection':
+        if (params.id && collections.collections) {
+          const savedSearch = collections.collections.find((s: any) => s.id === params.id);
+          if (savedSearch) {
+            loadSavedSearch(savedSearch);
+          }
+        }
+        break;
+
+      case 'search':
+        console.log('[App] Handling search params:', {
+          query: params.query,
+          expression: params.expression,
+          archived: params.archived,
+          duplicates: params.duplicates
+        });
+        
+        // Validate search parameters before application
+        if (params.query) {
+          console.log('[App] Applying search query:', params.query);
+          console.log('[App] Before setSearchQuery - current query:', searchQuery);
+          setSearchQuery(params.query);
+          console.log('[App] After setSearchQuery call completed');
+        } else {
+          console.log('[App] No search query to apply');
+        }
+        
+        if (params.expression) {
+          console.log('[App] Parsing and applying boolean expression:', params.expression);
+          const expression = urlParamToExpression(params.expression);
+          if (expression) {
+            console.log('[App] Successfully parsed expression, applying:', expression);
+            console.log('[App] Before setBooleanExpression - current expression:', booleanExpression);
+            setBooleanExpression(expression, params.query);
+            console.log('[App] After setBooleanExpression call completed');
+          } else {
+            console.error('[App] Failed to parse boolean expression from param:', params.expression);
+            // Fallback: treat expression as text query if it looks like simple text
+            if (params.expression && !params.expression.includes('&&') && !params.expression.includes('||')) {
+              console.log('[App] Using expression as fallback text query');
+              setSearchQuery(params.expression);
+            }
+          }
+        } else {
+          console.log('[App] No boolean expression to apply');
+        }
+        
+        if (params.archived) {
+          console.log('[App] Setting archived filter to true');
+          setShowArchived(true);
+        }
+        if (params.duplicates) {
+          console.log('[App] Setting duplicates filter to true');
+          setShowDuplicates(true);
+        }
+        break;
+
+      case 'public':
+        if (params.id) setPublicTxId(params.id);
+        break;
+
+      case 'shared':
+        if (params.id) setShareToken(params.id);
+        break;
+    }
+    } catch (error) {
+      console.error('[App] Error applying deep link params:', error, 'params:', params);
+      deepLinkStateRef.current.totalFailed++;
+      
+      // Implement retry logic for critical errors
+      if (deepLinkRetryRef.current.attempts < deepLinkRetryRef.current.maxAttempts) {
+        deepLinkRetryRef.current.attempts++;
+        deepLinkRetryRef.current.lastAttempt = Date.now();
+        deepLinkRetryRef.current.params = params;
+        
+        console.log('[App] Scheduling retry for deep link params:', {
+          attempt: deepLinkRetryRef.current.attempts,
+          maxAttempts: deepLinkRetryRef.current.maxAttempts,
+          params
+        });
+        
+        // Retry after a delay
+        setTimeout(() => {
+          if (deepLinkRetryRef.current.params) {
+            console.log('[App] Retrying deep link application');
+            actuallyApplyParams(deepLinkRetryRef.current.params!, `${source}-retry-${deepLinkRetryRef.current.attempts}`);
+            deepLinkRetryRef.current.params = null;
+          }
+        }, 1000 * deepLinkRetryRef.current.attempts); // Exponential backoff
+      } else {
+        console.error('[App] Max retry attempts reached for deep link:', params);
+        deepLinkRetryRef.current.params = null;
+      }
+    }
+  }, [prompts, collections.collections, setSearchQuery, setBooleanExpression, loadSavedSearch, setShowArchived, setShowDuplicates]);
+
+  useEffect(() => {
+    applyProtocolLinkParamsRef.current = (params: ProtocolLinkParams, source = 'unknown') => {
+      console.log('[App] applyProtocolLinkParams called:', params, 'source:', source);
+      console.log('[App] Current app state in applyProtocolLinkParams:', {
+        connected,
+        hasPassword,
+        promptsLength: prompts.length,
+        collectionsLoaded: !!collections.collections
+      });
+      
+      // Update tracking state
+      deepLinkStateRef.current.totalReceived++;
+      deepLinkStateRef.current.lastReceived = new Date().toISOString();
+      deepLinkStateRef.current.sources[source] = (deepLinkStateRef.current.sources[source] || 0) + 1;
+      
+      console.log('[App] Deep link state updated:', deepLinkStateRef.current);
+
+      // For types that don't require app state (public/shared views), apply immediately
+      if (params.type === 'public' || params.type === 'shared') {
+        console.log('[App] Immediate application for public/shared type');
+        actuallyApplyParams(params, source);
+        return;
+      }
+
+      // For other types, check if app state is ready
+      const appState = {
+        connected,
+        hasPassword,
+        promptsLoaded: prompts.length > 0,
+        collectionsLoaded: !!collections.collections
+      };
+      
+      console.log('[App] App state check:', appState);
+      
+      // Guard: defer if not connected, no password, or prompts not loaded
+      if (!connected || !hasPassword || prompts.length === 0) {
+        console.log('[App] App state not ready, storing deep link for later:', appState);
+        pendingDeepLinkRef.current = params;
+        deepLinkStateRef.current.totalPending++;
+        return;
+      }
+
+      // App is ready, apply immediately
+      console.log('[App] App state ready, applying immediately');
+      actuallyApplyParams(params, source);
+    };
+
+    // Apply any pending deep link once app becomes ready
+    if (connected && hasPassword && prompts.length > 0 && pendingDeepLinkRef.current) {
+      console.log('[App] App now ready, applying pending deep link:', pendingDeepLinkRef.current);
+      const pendingParams = pendingDeepLinkRef.current;
+      pendingDeepLinkRef.current = null; // Clear before applying to prevent loops
+      
+      // Add a small delay to ensure state is fully settled
+      setTimeout(() => {
+        actuallyApplyParams(pendingParams, 'pending-delayed');
+      }, 100);
+    }
+    
+    // Log app state readiness changes
+    console.log('[App] App state readiness check:', {
+      connected,
+      hasPassword,
+      promptsLoaded: prompts.length > 0,
+      hasPending: !!pendingDeepLinkRef.current,
+      pendingParams: pendingDeepLinkRef.current
+    });
+  }, [connected, hasPassword, prompts, collections.collections, actuallyApplyParams]);
+
+  // Listen for Tauri deep link events (only set up once on mount)
+  useEffect(() => {
+    console.log('[App] Deep link setup useEffect running, isTauri:', isTauri());
+    if (!isTauri()) {
+      console.log('[App] Not in Tauri environment, skipping deep link setup');
+      return;
+    }
+
+    let unlisten: (() => void) | undefined;
+    let setupComplete = false;
+
+    const setupTauriDeepLinks = async () => {
+      if (setupComplete) {
+        console.log('[App] Deep link setup already completed, skipping');
+        return;
+      }
+
+      console.log('[App] Setting up Tauri deep links...', {
+        userAgent: typeof navigator !== 'undefined' ? navigator.userAgent : 'unknown',
+        devMode: process.env.NODE_ENV === 'development'
+      });
+      try {
+        // Dynamic import to avoid issues in web environment
+        const { getCurrent, onOpenUrl } = await import('@tauri-apps/plugin-deep-link');
+        const { listen } = await import('@tauri-apps/api/event');
+        const { invoke } = await import('@tauri-apps/api/core');
+        console.log('[App] Deep link imports complete');
+
+        // Check if app was launched with a deep link (cold start) - all platforms
+        console.log('[App] About to call getCurrent() for deep links...');
+        const urls = await getCurrent();
+        console.log('[App] getCurrent() returned:', urls);
+        if (urls && urls.length > 0) {
+          console.log('[App] Tauri cold start deep link detected:', urls[0]);
+          const params = parseProtocolUrl(urls[0]);
+          console.log('[App] Parsed cold start params:', params);
+          console.log('[App] About to call applyProtocolLinkParamsRef.current for cold start...');
+          applyProtocolLinkParamsRef.current(params, 'tauri-cold-start');
+        } else {
+          console.log('[App] No cold start deep links found');
+        }
+
+        // Listen for deep links while running - all platforms
+        console.log('[App] About to set up onOpenUrl listener...');
+        await onOpenUrl((urls: string[]) => {
+          console.log('[App] onOpenUrl callback triggered with URLs:', urls);
+          if (urls && urls.length > 0) {
+            console.log('[App] Tauri onOpenUrl deep link detected:', urls[0]);
+            const params = parseProtocolUrl(urls[0]);
+            console.log('[App] Parsed onOpenUrl params:', params);
+            console.log('[App] About to call applyProtocolLinkParamsRef.current for onOpenUrl...');
+            applyProtocolLinkParamsRef.current(params, 'tauri-onopenurl');
+          }
+        });
+        console.log('[App] onOpenUrl listener set up successfully');
+
+        // Listen for single-instance forwarded links (Windows/Linux)
+        // Set up listener BEFORE signaling ready to avoid race condition
+        unlisten = await listen<string>('deep-link', (event) => {
+          console.log('[App] Tauri single-instance deep link event received (Windows/Linux):', event.payload);
+          // Also write to file for debugging
+          if (typeof window !== 'undefined' && (window as any).__TAURI__) {
+            const { writeTextFile } = require('@tauri-apps/plugin-fs');
+            writeTextFile('/tmp/deep-link-frontend.log', `[${new Date().toISOString()}] Deep link event received: ${event.payload}\n`, { append: true }).catch(() => {});
+          }
+          
+          try {
+            const params = parseProtocolUrl(event.payload);
+            console.log('[App] Parsed single-instance params:', params);
+            applyProtocolLinkParamsRef.current(params, 'tauri-single-instance-winlinux');
+          } catch (parseError) {
+            console.error('[App] Failed to parse single-instance deep link:', parseError, 'URL:', event.payload);
+          }
+        });
+        console.log('[App] Deep link listener registered successfully');
+
+        // Signal to Rust that frontend is ready and get any pending cold-start deep link
+        // This uses a Tauri command instead of events for reliable cross-process communication
+        console.log('[App] About to call frontend_ready command...');
+        const pendingUrl = await invoke<string | null>('frontend_ready');
+        console.log('[App] frontend_ready returned:', pendingUrl);
+        if (pendingUrl) {
+          console.log('[App] Processing cold-start deep link from Rust (Windows/Linux):', pendingUrl);
+          try {
+            const params = parseProtocolUrl(pendingUrl);
+            console.log('[App] Parsed frontend_ready params:', params);
+            console.log('[App] About to call applyProtocolLinkParamsRef.current for frontend_ready...');
+            applyProtocolLinkParamsRef.current(params, 'tauri-cold-start-winlinux');
+          } catch (parseError) {
+            console.error('[App] Failed to parse frontend_ready deep link:', parseError, 'URL:', pendingUrl);
+          }
+        } else {
+          console.log('[App] No pending deep link from frontend_ready');
+        }
+
+        setupComplete = true;
+        console.log('[App] Deep link setup completed successfully');
+      } catch (error) {
+        console.error('[App] Failed to setup Tauri deep links:', error);
+        // Retry setup after delay
+        setTimeout(() => {
+          console.log('[App] Retrying deep link setup...');
+          setupTauriDeepLinks();
+        }, 2000);
+      }
+    };
+
+    setupTauriDeepLinks();
+
+    // Fallback: periodically check for missed deep links
+    const fallbackInterval = setInterval(() => {
+      if (connected && hasPassword && prompts.length > 0) {
+        // Try to get any pending deep links that might have been missed
+        import('@tauri-apps/api/core').then(({ invoke }) => {
+          invoke<string | null>('frontend_ready').then(pendingUrl => {
+            if (pendingUrl) {
+              console.log('[App] Fallback found pending deep link:', pendingUrl);
+              const params = parseProtocolUrl(pendingUrl);
+              applyProtocolLinkParamsRef.current(params, 'fallback-check');
+            }
+          }).catch(() => {
+            // Silently ignore fallback errors
+          });
+        }).catch(() => {
+          // Silently ignore import errors
+        });
+      }
+    }, 5000); // Check every 5 seconds
+
+    return () => {
+      if (unlisten) unlisten();
+      clearInterval(fallbackInterval);
+    };
+  }, []); // Empty deps - only set up listener once
 
   // Update URL when app state changes (debounced)
   useEffect(() => {
@@ -336,35 +690,9 @@ function App() {
       const hasEncrypted = hasEncryptedPromptsInCache();
 
       if (hasEncrypted) {
-        // Returning user - fetch one encrypted prompt for password validation
+        // Returning user with encrypted prompts - show password prompt
         console.log('[App] User has encrypted prompts, showing unlock dialog');
-
-        // Get first encrypted prompt from cache
-        const { getCachedPrompts } = await import('@/core/storage/cache');
-        const cached = getCachedPrompts();
-        const encryptedPrompt = Object.values(cached).find(p =>
-          !p.tags.some(tag => tag.toLowerCase() === 'public')
-        );
-
-        if (encryptedPrompt) {
-          // Fetch the encrypted content for password validation
-          const { fetchPrompt } = await import('@/backend/api/client');
-          const promptWithEncrypted = await fetchPrompt(
-            encryptedPrompt.currentTxId,
-            undefined,
-            true // skipDecryption
-          );
-
-          if (promptWithEncrypted && typeof promptWithEncrypted.content === 'object') {
-            setSampleEncryptedData(promptWithEncrypted.content);
-            setPasswordUnlockOpen(true);
-          } else {
-            // Fallback to password prompt if we can't get encrypted data
-            setPasswordPromptOpen(true);
-          }
-        } else {
-          setPasswordPromptOpen(true);
-        }
+        setPasswordPromptOpen(true);
       } else {
         // New user - show password setup
         console.log('[App] New user, showing password setup dialog');
@@ -375,37 +703,12 @@ function App() {
     checkForEncryptedPrompts();
   }, [connected, hasPassword, isLoadingPassword, address]);
 
-  // Check for migration when using Turso
+  // Load prompts on identity connected
   useEffect(() => {
-    if (!FEATURE_FLAGS.TURSO_ENABLED || !connected || migrationCheckDone.current) return;
-
-    migrationCheckDone.current = true;
-    const status = getMigrationStatus();
-    setMigrationStatus(status);
-
-    // Show migration dialog if:
-    // - Has cached prompts
-    // - Not already migrated
-    // - Not already attempted (skipped)
-    if (status.hasCachedPrompts && !status.alreadyMigrated && !status.migrationAttempted) {
-      setMigrationDialogOpen(true);
-    } else {
-      // No migration needed, load prompts normally
+    if (identity.connected) {
       loadPrompts();
     }
-  }, [connected, loadPrompts]);
-
-  // Load prompts after password is set (Arweave mode)
-  useEffect(() => {
-    if (!FEATURE_FLAGS.TURSO_ENABLED && connected && hasPassword) {
-      loadPrompts(password || undefined);
-    }
-  }, [connected, hasPassword, password, loadPrompts]);
-
-  const handleMigrationComplete = () => {
-    // Reload prompts from Turso after migration
-    loadPrompts();
-  };
+  }, [identity.connected, loadPrompts]);
 
   const handlePasswordSet = (newPassword: string) => {
     setPassword(newPassword);
@@ -418,18 +721,42 @@ function App() {
     setSampleEncryptedData(null);
   };
 
+  // Pre-compute duplicate IDs separately (O(n²) operation - only runs when prompts change)
+  const duplicateIds = useMemo(() => {
+    if (!showDuplicates) return null;
+    return new Set(findDuplicates(prompts).flatMap(group => group.prompts.map(p => p.id)));
+  }, [prompts, showDuplicates]);
+
+  // Pre-compute timestamps for sorting (avoid Date creation during sort)
+  const timestampMap = useMemo(() =>
+    new Map(prompts.map(p => [p.id, new Date(p.updatedAt).getTime()])),
+    [prompts]
+  );
+
   // Filter prompts based on search and tags (memoized for performance)
+  // Uses effectiveSearchQuery: deferred for typing (smooth), instant for clearing
   const filteredPrompts = useMemo(() => {
+    console.log('[App] Filtering prompts:', {
+      totalPrompts: prompts.length,
+      effectiveSearchQuery,
+      searchQuery,
+      booleanExpression,
+      showArchived,
+      showDuplicates,
+      selectedTags
+    });
+    
     // Get search results with scores for sorting
-    const searchResults = searchQuery ? searchPrompts(searchQuery) : [];
+    const searchResults = effectiveSearchQuery ? searchPrompts(effectiveSearchQuery) : [];
     const searchScoreMap = new Map(searchResults.map(r => [r.id, r.score]));
+    
+    console.log('[App] Search results:', {
+      query: effectiveSearchQuery,
+      resultCount: searchResults.length,
+      results: searchResults.slice(0, 5) // First 5 for debugging
+    });
 
-    // Pre-compute duplicate IDs once if needed
-    const duplicateIds = showDuplicates
-      ? new Set(findDuplicates(prompts).flatMap(group => group.prompts.map(p => p.id)))
-      : null;
-
-    return prompts
+    const finalResult = prompts
       .filter(prompt => {
         // Archive filter - mutually exclusive
         if (showArchived) {
@@ -453,7 +780,7 @@ function App() {
         }
 
         // Text search filter (works with both boolean and simple tag filters)
-        if (searchQuery) {
+        if (effectiveSearchQuery) {
           if (!searchScoreMap.has(prompt.id)) return false;
         }
 
@@ -461,15 +788,24 @@ function App() {
       })
       .sort((a, b) => {
         // When searching, sort by FlexSearch relevance score
-        if (searchQuery && searchScoreMap.size > 0) {
-          const scoreA = searchScoreMap.get(a.id) || 0;
-          const scoreB = searchScoreMap.get(b.id) || 0;
-          return scoreB - scoreA; // Higher score first
+        if (effectiveSearchQuery && searchScoreMap.size > 0) {
+          return (searchScoreMap.get(b.id) || 0) - (searchScoreMap.get(a.id) || 0);
         }
-        // Default sort by updatedAt (most recent first)
-        return new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime();
+        // Default sort by updatedAt (most recent first) - use pre-computed timestamps
+        return (timestampMap.get(b.id) || 0) - (timestampMap.get(a.id) || 0);
       });
-  }, [prompts, searchQuery, showArchived, showDuplicates, booleanExpression, selectedTags]);
+    
+    console.log('[App] Final filtered prompts:', {
+      beforeFilter: prompts.length,
+      afterFilter: finalResult.length,
+      effectiveSearchQuery,
+      hasBooleanExpression: !!booleanExpression,
+      showArchived,
+      showDuplicates
+    });
+    
+    return finalResult;
+  }, [prompts, effectiveSearchQuery, showArchived, duplicateIds, booleanExpression, selectedTags, timestampMap]);
 
   // Observe New Prompt button visibility to show floating version in header
   useEffect(() => {
@@ -491,10 +827,38 @@ function App() {
     return () => observer.disconnect();
   }, [filteredPrompts.length]);
 
+  // Track desktop SearchBar visibility to show floating version when scrolled past
+  const wasSearchBarVisibleRef = useRef(true);
+  useEffect(() => {
+    const checkSearchBarVisibility = () => {
+      if (!desktopSearchBarContainerRef.current) return;
+
+      const rect = desktopSearchBarContainerRef.current.getBoundingClientRect();
+      // Consider invisible when the bottom of the search bar is above the header (80px)
+      const isVisible = rect.bottom > 80;
+
+      // If transitioning from floating (invisible) back to normal (visible), scroll to top
+      if (isVisible && !wasSearchBarVisibleRef.current) {
+        window.scrollTo({ top: 0, behavior: 'instant' });
+      }
+
+      wasSearchBarVisibleRef.current = isVisible;
+      setIsSearchBarVisible(isVisible);
+    };
+
+    // Check on scroll
+    window.addEventListener('scroll', checkSearchBarVisibility, { passive: true });
+    // Initial check
+    checkSearchBarVisibility();
+
+    return () => window.removeEventListener('scroll', checkSearchBarVisibility);
+  }, []);
+
   // Reset selected index when filtered prompts change
+  // Use effectiveSearchQuery to stay in sync with filtering
   useEffect(() => {
     setSelectedIndex(-1);
-  }, [filteredPrompts.length, searchQuery, selectedTags, booleanExpression, showArchived]);
+  }, [filteredPrompts.length, effectiveSearchQuery, selectedTags, booleanExpression, showArchived]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -599,15 +963,9 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
-          // If in search input, check current selection
+          // If in search input, go to first result
           if (isSearchInput) {
-            // If nothing selected or middle item selected, go to last item
-            if (selectedIndex === -1 || (selectedIndex !== 0 && selectedIndex !== numResults - 1)) {
-              setSelectedIndex(numResults - 1);
-            } else {
-              // Otherwise go to first item
-              setSelectedIndex(0);
-            }
+            setSelectedIndex(0);
             searchBarRef.current?.blurSearchInput();
           } else if (viewMode === 'list') {
             // List view: go to next item (wrap around at the end)
@@ -625,16 +983,9 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
-
-          // If in search input, check current selection
+          // If in search input, go to last result
           if (isSearchInput) {
-            // If nothing selected or middle item selected, go to last item
-            if (selectedIndex === -1 || (selectedIndex !== 0 && selectedIndex !== numResults - 1)) {
-              setSelectedIndex(numResults - 1);
-            } else {
-              // Otherwise go to last item
-              setSelectedIndex(numResults - 1);
-            }
+            setSelectedIndex(numResults - 1);
             searchBarRef.current?.blurSearchInput();
           } else if (viewMode === 'list') {
             // List view: if at top item (index 0), focus search input and unfocus results
@@ -716,6 +1067,13 @@ function App() {
             archivePrompt(filteredPrompts[selectedIndex].id, password || undefined);
           }
           break;
+        case '?':
+          // Show hotkeys dialog (works even when other dialogs are open)
+          if (!isTyping) {
+            event.preventDefault();
+            setHotkeysOpen(true);
+          }
+          break;
       }
     };
 
@@ -782,15 +1140,26 @@ function App() {
   const handleRestoreVersion = async (version: PromptVersion) => {
     if (!selectedPrompt) return;
 
-    // Fetch the old version and create a new version from it
-    const oldPrompt = await import('@/backend/api/client').then(m => m.fetchPrompt(version.txId, password || undefined));
-    if (oldPrompt) {
+    try {
+      // Fetch version content from Turso
+      const { getVersionContent } = await import('@/backend/api/turso-queries');
+      const content = await getVersionContent(version.txId);
+
+      if (!content) {
+        console.error('[App] Failed to get version content');
+        return;
+      }
+
+      // Update prompt with restored content
       await updatePrompt(selectedPrompt.id, {
-        content: oldPrompt.content,
-        title: oldPrompt.title,
-        description: oldPrompt.description,
-        tags: oldPrompt.tags,
+        content,
       }, password || undefined);
+
+      // Close version history and refresh prompt
+      setVersionHistoryOpen(false);
+      setViewDialogOpen(false);
+    } catch (error) {
+      console.error('[App] Failed to restore version:', error);
     }
   };
 
@@ -865,8 +1234,8 @@ function App() {
     alert(message);
   };
 
-  // Turso shared prompt view (no authentication required)
-  if (shareToken && FEATURE_FLAGS.TURSO_ENABLED) {
+  // Shared prompt view (no authentication required)
+  if (shareToken) {
     return <TursoSharedPromptView shareToken={shareToken} onBack={handleExitSharedView} />;
   }
 
@@ -876,10 +1245,9 @@ function App() {
   }
 
   if (!connected) {
-    // Turso mode: show loading spinner while initializing
-    if (FEATURE_FLAGS.TURSO_ENABLED) {
-      return (
-        <div className="min-h-screen flex items-center justify-center bg-background p-4">
+    // Show loading spinner while initializing
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
           <div className="text-center space-y-6 max-w-md">
             <div className="relative inline-block">
               <div className="animate-spin inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full" role="status">
@@ -893,32 +1261,14 @@ function App() {
             </p>
           </div>
         </div>
-      );
-    }
-
-    // Arweave mode: show wallet connect
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-background p-4">
-        <div className="text-center space-y-6 max-w-md">
-          <div className="animate-bounce-slow">
-            <img src="/logo.svg" alt="Pocket Prompt Logo" className="h-16 w-16 sm:h-20 sm:w-20 mx-auto" />
-          </div>
-          <h1 className="text-3xl sm:text-4xl font-bold">Pocket Prompt</h1>
-          <p className="text-muted-foreground text-sm sm:text-base">
-            Your permanent, decentralized prompt library powered by Arweave.
-            Connect your wallet to get started.
-          </p>
-          <WalletButton />
-        </div>
-      </div>
     );
   }
 
   return (
     <div className="min-h-screen bg-background">
       {/* Header */}
-      <header className="sticky top-0 z-50 pointer-events-none">
-        <div className="mx-auto max-w-6xl px-4 sm:px-6 lg:px-10 pt-[calc(env(safe-area-inset-top)+0.85rem)]">
+      <header className="sticky top-0 z-50 pointer-events-none px-4 sm:px-6 lg:px-10 pt-[calc(env(safe-area-inset-top)+0.85rem)]">
+        <div className="mx-auto max-w-6xl">
           <div className="border border-border bg-card rounded-lg px-5 sm:px-6 py-4 sm:py-4 flex items-center justify-between gap-3 shadow-md pointer-events-auto">
           <h1 className="flex items-center gap-2.5 sm:gap-2 text-lg font-bold sm:text-xl md:text-2xl">
             <img src="/logo.svg" alt="Pocket Prompt Logo" className="h-6 w-6 sm:h-6 sm:w-6" />
@@ -937,11 +1287,11 @@ function App() {
                     onClick={() => setUploadDialogOpen(true)}
                     className="hidden sm:flex h-10 w-10 rounded-full"
                   >
-                    <Upload className="h-4 w-4" />
+                    <Download className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
                 <TooltipContent>
-                  <p>Upload Files</p>
+                  <p>Import/Export</p>
                 </TooltipContent>
               </Tooltip>
 
@@ -980,18 +1330,35 @@ function App() {
       {/* Main Content */}
       <main className="space-y-2 px-4 pt-6 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-10 sm:pb-12 lg:px-10">
         <section className="mx-auto flex max-w-6xl flex-col gap-4">
-          {/* Desktop SearchBar - hidden on mobile */}
-          <div className="hidden sm:block">
-            <SearchBar
-              ref={searchBarRef}
-              showArchived={showArchived}
-              setShowArchived={setShowArchived}
-              viewMode={viewMode}
-              onViewModeToggle={toggleViewMode}
-              showDuplicates={showDuplicates}
-              setShowDuplicates={setShowDuplicates}
-              collections={collections}
-            />
+          {/* Desktop SearchBar - hidden on mobile, becomes fixed when scrolled past */}
+          <div ref={desktopSearchBarContainerRef} className="hidden sm:block">
+            {/* Placeholder to maintain layout when search bar is fixed */}
+            <div className={isSearchBarVisible ? 'hidden' : 'block'}>
+              <div className="h-[120px]" /> {/* Approximate height of SearchBar */}
+            </div>
+            {/* Actual SearchBar - fixed when scrolled past */}
+            <div
+              className={`transition-all duration-200 ease-out ${
+                isSearchBarVisible
+                  ? ''
+                  : 'fixed inset-x-0 bottom-0 z-40 px-6 pb-6 lg:px-10'
+              }`}
+            >
+              <div className={isSearchBarVisible ? '' : 'mx-auto max-w-6xl shadow-2xl shadow-black/20 rounded-lg'}>
+                <SearchBar
+                  ref={searchBarRef}
+                  showArchived={showArchived}
+                  setShowArchived={setShowArchived}
+                  viewMode={viewMode}
+                  onViewModeToggle={toggleViewMode}
+                  showDuplicates={showDuplicates}
+                  setShowDuplicates={setShowDuplicates}
+                  collections={collections}
+                  showNewPromptButton={!isSearchBarVisible}
+                  onCreateNew={handleCreateNew}
+                />
+              </div>
+            </div>
           </div>
           {showArchived && (
             <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 text-sm shadow-sm">
@@ -1075,7 +1442,7 @@ function App() {
         </section>
       </main>
 
-      {/* Floating Search Bar - Mobile only */}
+      {/* Floating Search Bar - Mobile */}
       <div className="pointer-events-none sm:hidden">
         <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
           <div className="pointer-events-auto w-full max-w-2xl">
@@ -1094,11 +1461,13 @@ function App() {
         </div>
       </div>
 
-      {/* Floating Action Button */}
+      {/* Floating Action Button - hidden on desktop when search bar is floating */}
       <Button
         onClick={handleCreateNew}
         size="lg"
-        className="fixed bottom-6 right-6 sm:bottom-6 sm:right-6 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-110 active:scale-95 z-50 h-16 w-16 sm:h-14 sm:w-14 md:h-12 md:w-auto md:px-6 flex items-center justify-center"
+        className={`fixed bottom-6 right-6 sm:bottom-6 sm:right-6 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-110 active:scale-95 z-50 h-16 w-16 sm:h-14 sm:w-14 md:h-12 md:w-auto md:px-6 flex items-center justify-center ${
+          !isSearchBarVisible ? 'sm:hidden' : ''
+        }`}
         title="Create prompt"
       >
         <Plus className="h-7 w-7 sm:h-6 sm:w-6 md:mr-2 flex-shrink-0" />
@@ -1159,14 +1528,10 @@ function App() {
         onOpenChange={setTeamsWaitlistOpen}
       />
 
-      {migrationStatus && (
-        <MigrationDialog
-          open={migrationDialogOpen}
-          onOpenChange={setMigrationDialogOpen}
-          status={migrationStatus}
-          onComplete={handleMigrationComplete}
-        />
-      )}
+      <HotkeysDialog
+        open={hotkeysOpen}
+        onOpenChange={setHotkeysOpen}
+      />
     </div>
   );
 }

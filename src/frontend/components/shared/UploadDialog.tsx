@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect } from 'react';
 import type { DragEvent } from 'react';
-import { Upload, FolderUp, FileText, CheckCircle, AlertCircle, ArrowLeft, Copy, Download } from 'lucide-react';
+import { Upload, FolderUp, FileText, CheckCircle, AlertCircle, Copy, Download } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/frontend/components/ui/dialog';
 import { Button } from '@/frontend/components/ui/button';
 import { Badge } from '@/frontend/components/ui/badge';
@@ -368,10 +368,6 @@ export function UploadDialog({ open, onOpenChange, onImport, existingPromptIds, 
     }
   };
 
-  const handleBack = () => {
-    resetState();
-  };
-
   const handleClose = () => {
     resetState();
     onOpenChange(false);
@@ -394,14 +390,8 @@ export function UploadDialog({ open, onOpenChange, onImport, existingPromptIds, 
         <DialogContent className="max-w-4xl h-[90vh] flex flex-col p-0">
           {/* Header - Sticky */}
           <DialogHeader className="flex-none px-6 pt-6 pb-4 rounded-t-lg">
-            <DialogTitle className="flex items-center justify-between">
-              <span>Review Prompts ({successCount} parsed, {selectedCount} selected)</span>
-              {!initialPrompts && (
-                <Button variant="ghost" size="sm" onClick={handleBack}>
-                  <ArrowLeft className="h-4 w-4 mr-2" />
-                  Back
-                </Button>
-              )}
+            <DialogTitle>
+              Review Prompts ({successCount} parsed, {selectedCount} selected)
             </DialogTitle>
           </DialogHeader>
 
@@ -542,11 +532,11 @@ export function UploadDialog({ open, onOpenChange, onImport, existingPromptIds, 
         <Tabs value={activeTab} onValueChange={(v: string) => setActiveTab(v as 'import' | 'export')}>
           <TabsList className="grid w-full grid-cols-2">
             <TabsTrigger value="import" className="gap-2">
-              <Upload className="h-4 w-4" />
+              <Download className="h-4 w-4" />
               Import
             </TabsTrigger>
             <TabsTrigger value="export" className="gap-2">
-              <Download className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
               Export
             </TabsTrigger>
           </TabsList>

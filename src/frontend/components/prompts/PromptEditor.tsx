@@ -115,9 +115,9 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
       // Check if adding "public" tag - show warning
       if (tag.toLowerCase() === 'public') {
         const confirmed = window.confirm(
-          '⚠️ WARNING: Making this prompt public will store it as plain text on Arweave PERMANENTLY.\n\n' +
+          '⚠️ WARNING: Making this prompt public will store it as plain text PERMANENTLY.\n\n' +
           '• Anyone can read it forever\n' +
-          '• It cannot be deleted from Arweave\n' +
+          '• It cannot be deleted\n' +
           '• Making it private later will NOT remove the public version\n\n' +
           'Are you sure you want to make this prompt public?'
         );
@@ -150,9 +150,9 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
     } else {
       // Add "public" tag - show warning confirmation
       const confirmed = window.confirm(
-        '⚠️ WARNING: Making this prompt public will store it as plain text on Arweave PERMANENTLY.\n\n' +
+        '⚠️ WARNING: Making this prompt public will store it as plain text PERMANENTLY.\n\n' +
         '• Anyone can read it forever\n' +
-        '• It cannot be deleted from Arweave\n' +
+        '• It cannot be deleted\n' +
         '• Making it private later will NOT remove the public version\n\n' +
         'Are you sure you want to make this prompt public?'
       );
@@ -198,7 +198,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                 {prompt ? 'Edit Prompt' : 'Create New Prompt'}
               </DialogTitle>
               <DialogDescription className="text-base text-foreground/70 max-w-2xl">
-                {prompt ? 'Update your prompt. A new version will be created and uploaded to Arweave.' : "Craft a new prompt and we'll prepare it for Arweave (free under 100 KiB)."}
+                {prompt ? 'Update your prompt. A new version will be created.' : "Craft a new prompt and we'll prepare it for storage (free under 100 KiB)."}
               </DialogDescription>
             </div>
           </div>
@@ -301,7 +301,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                   </>
                 ) : (
                   <>
-                    <strong>Warning:</strong> This prompt will be permanently public on Arweave. Removing the public tag later will not erase this copy.
+                    <strong>Warning:</strong> This prompt will be permanently public. Removing the public tag later will not erase this copy.
                   </>
                 )}
               </div>
@@ -316,7 +316,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
               className="flex items-center gap-1.5 px-3 py-1 text-xs"
               title={willBeEncrypted
                 ? 'This prompt will be encrypted. Only your wallet can decrypt it.'
-                : 'This prompt will be public. Anyone can read it on Arweave.'}
+                : 'This prompt will be public. Anyone can read it.'}
             >
               {willBeEncrypted ? (
                 <>

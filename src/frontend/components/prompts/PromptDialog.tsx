@@ -1,11 +1,9 @@
-import { Copy, Edit, Archive, History, Check, Lock, Globe, Share2, Link, Loader2, X } from 'lucide-react';
+import { Copy, Edit, Archive, History, Check, Lock, Share2, Link, Loader2, X } from 'lucide-react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/frontend/components/ui/dialog';
 import { Button } from '@/frontend/components/ui/button';
 import { Badge } from '@/frontend/components/ui/badge';
 import type { Prompt } from '@/shared/types/prompt';
 import { useState, useEffect } from 'react';
-import { wasPromptEncrypted } from '@/core/encryption/crypto';
-import { FEATURE_FLAGS } from '@/shared/config/features';
 import * as tursoQueries from '@/backend/api/turso-queries';
 
 interface PromptDialogProps {
@@ -32,7 +30,7 @@ export function PromptDialog({
 
   // Fetch share token when dialog opens
   useEffect(() => {
-    if (open && prompt && FEATURE_FLAGS.TURSO_ENABLED) {
+    if (open && prompt) {
       tursoQueries.getShareToken(prompt.id).then(setShareToken);
     }
   }, [open, prompt]);
@@ -46,7 +44,7 @@ export function PromptDialog({
   }, [open]);
 
   const handleShare = async () => {
-    if (!prompt || !FEATURE_FLAGS.TURSO_ENABLED) return;
+    if (!prompt) return;
 
     setIsSharing(true);
     try {
@@ -73,7 +71,7 @@ export function PromptDialog({
   };
 
   const handleUnshare = async () => {
-    if (!prompt || !FEATURE_FLAGS.TURSO_ENABLED) return;
+    if (!prompt) return;
 
     try {
       await tursoQueries.removeShareToken(prompt.id);
@@ -132,9 +130,6 @@ export function PromptDialog({
 
   if (!prompt) return null;
 
-  const isEncrypted = wasPromptEncrypted(prompt.tags);
-  const isPublic = !isEncrypted;
-
   const handleCopy = () => {
     navigator.clipboard.writeText(prompt.content);
     setCopied(true);
@@ -183,45 +178,23 @@ export function PromptDialog({
               )}
 
             <div className="flex flex-wrap items-center gap-2">
-                {FEATURE_FLAGS.TURSO_ENABLED ? (
-                  shareToken ? (
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1.5 px-3 py-1 text-xs bg-green-500/15 text-green-700 dark:text-green-400"
-                      title="This prompt has a shareable link"
-                    >
-                      <Link className="h-3.5 w-3.5" />
-                      Shared
-                    </Badge>
-                  ) : (
-                    <Badge
-                      variant="secondary"
-                      className="flex items-center gap-1.5 px-3 py-1 text-xs"
-                      title="This prompt is private"
-                    >
-                      <Lock className="h-3.5 w-3.5" />
-                      Private
-                    </Badge>
-                  )
+                {shareToken ? (
+                  <Badge
+                    variant="secondary"
+                    className="flex items-center gap-1.5 px-3 py-1 text-xs bg-green-500/15 text-green-700 dark:text-green-400"
+                    title="This prompt has a shareable link"
+                  >
+                    <Link className="h-3.5 w-3.5" />
+                    Shared
+                  </Badge>
                 ) : (
                   <Badge
-                    variant={isEncrypted ? 'default' : 'secondary'}
+                    variant="secondary"
                     className="flex items-center gap-1.5 px-3 py-1 text-xs"
-                    title={isEncrypted
-                      ? 'This prompt is encrypted. Only your wallet can decrypt it.'
-                      : 'This prompt is public. Anyone can read it on Arweave.'}
+                    title="This prompt is private"
                   >
-                    {isPublic ? (
-                      <>
-                        <Globe className="h-3.5 w-3.5" />
-                        Public
-                      </>
-                    ) : (
-                      <>
-                        <Lock className="h-3.5 w-3.5" />
-                        Encrypted
-                      </>
-                    )}
+                    <Lock className="h-3.5 w-3.5" />
+                    Private
                   </Badge>
                 )}
                 {hasVersionHistory(prompt) && (
@@ -240,18 +213,7 @@ export function PromptDialog({
           <div className="flex flex-col gap-1 text-xs text-foreground/60">
             <div>Created: <span className="font-medium text-foreground/80">{formatDate(prompt.createdAt)}</span></div>
             <div>Last updated: <span className="font-medium text-foreground/80">{formatDate(prompt.updatedAt)}</span></div>
-            {prompt.currentTxId && (
-              <div className="truncate" title={prompt.currentTxId}>
-                Arweave TxID: <a
-                  href={`https://viewblock.io/arweave/tx/${prompt.currentTxId}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="font-mono text-foreground/80 hover:text-foreground underline decoration-dotted underline-offset-2"
-                >
-                  {prompt.currentTxId.slice(0, 12)}...{prompt.currentTxId.slice(-8)}
-                </a>
-              </div>
-            )}
+
           </div>
         </DialogHeader>
 
@@ -290,9 +252,8 @@ export function PromptDialog({
             )}
           </Button>
 
-          {/* Share button - only show for Turso mode */}
-          {FEATURE_FLAGS.TURSO_ENABLED && (
-            shareToken ? (
+          {/* Share button */}
+          {shareToken ? (
               <div className="flex items-center gap-1">
                 <Button
                   variant="outline"
@@ -343,7 +304,6 @@ export function PromptDialog({
                   </>
                 )}
               </Button>
-            )
           )}
 
           {hasVersionHistory(prompt) && (

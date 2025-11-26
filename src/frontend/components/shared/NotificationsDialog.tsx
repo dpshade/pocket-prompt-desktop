@@ -2,12 +2,12 @@ import { Bell, CheckCircle2, XCircle, Clock, Trash2, FolderOpen, FileText } from
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/frontend/components/ui/dialog';
 import { Button } from '@/frontend/components/ui/button';
 import { Badge } from '@/frontend/components/ui/badge';
-import type { ArweaveNotification } from '@/shared/types/notification';
+import type { UploadNotification } from '@/shared/types/notification';
 
 interface NotificationsDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  notifications: ArweaveNotification[];
+  notifications: UploadNotification[];
   onClear: (id: string) => void;
   onClearAll: () => void;
 }
@@ -49,7 +49,7 @@ export function NotificationsDialog({
     });
   };
 
-  const getStatusIcon = (status: ArweaveNotification['status']) => {
+  const getStatusIcon = (status: UploadNotification['status']) => {
     switch (status) {
       case 'pending':
         return <Clock className="h-4 w-4 text-orange-500 animate-pulse" />;
@@ -60,7 +60,7 @@ export function NotificationsDialog({
     }
   };
 
-  const getStatusBadge = (status: ArweaveNotification['status']) => {
+  const getStatusBadge = (status: UploadNotification['status']) => {
     switch (status) {
       case 'pending':
         return (
@@ -83,7 +83,7 @@ export function NotificationsDialog({
     }
   };
 
-  const getTypeIcon = (type: ArweaveNotification['type']) => {
+  const getTypeIcon = (type: UploadNotification['type']) => {
     switch (type) {
       case 'prompt':
         return <FileText className="h-4 w-4 text-primary" />;
@@ -101,10 +101,10 @@ export function NotificationsDialog({
         <DialogHeader className="px-6 pt-6 pb-4">
           <DialogTitle className="flex items-center gap-2 text-base">
             <Bell className="h-4 w-4 text-primary" />
-            Arweave Notifications
+            Upload Notifications
           </DialogTitle>
           <DialogDescription className="text-sm">
-            Track your uploads to the Arweave network
+            Track your uploads to the network
           </DialogDescription>
         </DialogHeader>
 

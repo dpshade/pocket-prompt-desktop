@@ -1,0 +1,19 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Deep Link Test</title>
+</head>
+<body>
+    <h1>Deep Link Test</h1>
+    <button onclick="testDeepLink()">Test Deep Link</button>
+    <div id="result"></div>
+    
+    <script>
+        function testDeepLink() {
+            const url = 'promptvault://search?q=test&expr=tag:example';
+            document.getElementById('result').innerHTML = 'Opening: ' + url;
+            window.open(url, '_blank');
+        }
+    </script>
+</body>
+</html>

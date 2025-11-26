@@ -15,6 +15,9 @@
     "clipboard-manager:allow-write-text",
     "global-shortcut:default",
     "global-shortcut:allow-register",
-    "global-shortcut:allow-unregister"
+    "global-shortcut:allow-unregister",
+    "deep-link:default",
+    "core:event:allow-emit",
+    "core:event:allow-listen"
   ]
 }

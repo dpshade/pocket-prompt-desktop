@@ -1,5 +1,5 @@
 /**
- * Migration dialog for importing encrypted Arweave prompts to Turso
+ * Migration dialog for importing encrypted prompts to Turso
  */
 import { useState } from 'react';
 import { ArrowRight, CheckCircle, AlertCircle, Loader2, KeyRound, Database } from 'lucide-react';

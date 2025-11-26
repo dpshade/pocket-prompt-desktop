@@ -1,6 +1,6 @@
 import { TurboFactory, ArconnectSigner } from '@ardrive/turbo-sdk/web';
 import type { SavedSearch } from '@/shared/types/prompt';
-import arweaveConfig from '../../../arweave.config.json';
+import arweaveConfig from '../../../config/arweave.config.json';
 
 const ARWEAVE_GATEWAY = 'https://arweave.net';
 

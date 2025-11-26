@@ -9,7 +9,8 @@
  * 5. Secure: password is secret, PBKDF2 with 250k iterations
  */
 
-import { getProtocolVersion } from '@/backend/config/arweave';
+// Protocol version for key derivation salt (inlined from arweave config)
+const PROTOCOL_VERSION = 'Pocket-Prompt-v3.5';
 
 export interface EncryptedData {
   encryptedContent: string;
@@ -152,7 +153,7 @@ async function getOrCreateMasterKey(password: string): Promise<CryptoKey> {
 
       // Use app-specific salt based on current protocol version
       // This ensures encryption is tied to the protocol version
-      const protocolVersion = getProtocolVersion().toLowerCase();
+      const protocolVersion = PROTOCOL_VERSION.toLowerCase();
       const salt = new TextEncoder().encode(protocolVersion);
 
       // Derive master AES-256 key using PBKDF2 with 250,000 iterations

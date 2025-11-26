@@ -93,12 +93,15 @@ export interface SearchResult {
 /**
  * Search prompts by query
  * Returns array of search results with IDs and scores, sorted by relevance
+ * Uses FlexSearch across title, description, content, tags
  */
 export function searchPrompts(query: string): SearchResult[] {
-  if (!query.trim()) {
+  const trimmed = query.trim();
+  if (!trimmed) {
     return [];
   }
 
+  // Use FlexSearch for all queries
   try {
     const results = promptIndex.search(query, {
       limit: 100,

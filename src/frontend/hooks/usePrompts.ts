@@ -2,13 +2,8 @@ import { create } from 'zustand';
 import type { Prompt, PromptMetadata, BooleanExpression, SavedSearch } from '@/shared/types/prompt';
 import { getCachedPrompts, cachePrompt, addPromptToProfile, archivePrompt as archivePromptStorage, restorePrompt as restorePromptStorage } from '@/core/storage/cache';
 import { indexPrompts, addToIndex, removeFromIndex } from '@/core/search';
-import { FEATURE_FLAGS } from '@/shared/config/features';
 import { getDeviceId } from '@/core/identity/device';
-import { isTursoConfigured } from '@/backend/api/turso';
 import * as tursoQueries from '@/backend/api/turso-queries';
-
-// Legacy imports for Arweave mode (when enabled)
-import { fetchPrompt, uploadPrompt, getWalletJWK, getWalletAddress, queryAllUserPrompts, updatePromptArchiveStatus } from '@/backend/api/client';
 
 // Notification callbacks for upload tracking
 export type UploadStartCallback = (txId: string, title: string) => void;
@@ -50,58 +45,35 @@ export const usePrompts = create<PromptsState>((set, get) => ({
   onUploadStart: undefined,
   onUploadComplete: undefined,
 
-  loadPrompts: async (password?: string) => {
-    // Use Turso backend (local SQLite in desktop, cloud in web)
-    if (FEATURE_FLAGS.TURSO_ENABLED && isTursoConfigured()) {
-      return loadPromptsFromTurso(set, get);
-    }
-
-    // Fall back to Arweave when Turso is disabled
-    return loadPromptsFromArweave(set, get, password);
+  loadPrompts: async (_password?: string) => {
+    return loadPromptsFromTurso(set, get);
   },
 
-  addPrompt: async (promptData, password?: string) => {
-    // Use Turso backend (local SQLite in desktop, cloud in web)
-    if (FEATURE_FLAGS.TURSO_ENABLED && isTursoConfigured()) {
-      return addPromptToTurso(set, get, promptData);
-    }
-
-    // Fall back to Arweave when Turso is disabled
-    return addPromptToArweave(set, get, promptData, password);
+  addPrompt: async (promptData, _password?: string) => {
+    return addPromptToTurso(set, get, promptData);
   },
 
-  updatePrompt: async (id, updates, password?: string) => {
-    // Use Turso backend (local SQLite in desktop, cloud in web)
-    if (FEATURE_FLAGS.TURSO_ENABLED && isTursoConfigured()) {
-      return updatePromptInTurso(set, get, id, updates);
-    }
-
-    // Fall back to Arweave when Turso is disabled
-    return updatePromptInArweave(set, get, id, updates, password);
+  updatePrompt: async (id, updates, _password?: string) => {
+    return updatePromptInTurso(set, get, id, updates);
   },
 
-  archivePrompt: async (id, password?: string) => {
-    // Use Turso backend (local SQLite in desktop, cloud in web)
-    if (FEATURE_FLAGS.TURSO_ENABLED && isTursoConfigured()) {
-      return archivePromptInTurso(set, get, id);
-    }
-
-    // Fall back to Arweave when Turso is disabled
-    return archivePromptInArweave(set, get, id, password);
+  archivePrompt: async (id, _password?: string) => {
+    return archivePromptInTurso(set, get, id);
   },
 
-  restorePrompt: async (id, password?: string) => {
-    // Use Turso backend (local SQLite in desktop, cloud in web)
-    if (FEATURE_FLAGS.TURSO_ENABLED && isTursoConfigured()) {
-      return restorePromptInTurso(set, get, id);
-    }
-
-    // Fall back to Arweave when Turso is disabled
-    return restorePromptInArweave(set, get, id, password);
+  restorePrompt: async (id, _password?: string) => {
+    return restorePromptInTurso(set, get, id);
   },
 
   setSearchQuery: (query) => {
+    console.log('[UsePrompts] Setting search query:', query, 'previous query:', get().searchQuery);
     set({ searchQuery: query });
+    console.log('[UsePrompts] Search query updated, new state:', { 
+      query: get().searchQuery, 
+      hasExpression: !!get().booleanExpression,
+      promptsCount: get().prompts.length 
+    });
+    console.log('[UsePrompts] setSearchQuery completed, state should trigger re-render');
   },
 
   toggleTag: (tag) => {
@@ -117,12 +89,30 @@ export const usePrompts = create<PromptsState>((set, get) => ({
   },
 
   setBooleanExpression: (expression, textQuery) => {
+    console.log('[UsePrompts] Setting boolean expression:', expression, 'text query:', textQuery);
+    const previousState = {
+      expression: get().booleanExpression,
+      query: get().searchQuery,
+      tags: get().selectedTags
+    };
+    
     set({
       booleanExpression: expression,
       searchQuery: textQuery || '',
       selectedTags: [], // Clear simple tag filters when using boolean
       activeSavedSearch: null, // Clear active saved search if manually setting expression
     });
+    
+    console.log('[UsePrompts] Boolean expression updated:', {
+      previous: previousState,
+      new: {
+        expression: get().booleanExpression,
+        query: get().searchQuery,
+        tags: get().selectedTags,
+        activeSavedSearch: get().activeSavedSearch
+      }
+    });
+    console.log('[UsePrompts] setBooleanExpression completed, state should trigger re-render');
   },
 
   loadSavedSearch: (search) => {
@@ -333,370 +323,3 @@ async function restorePromptInTurso(set: SetState, get: GetState, id: string): P
   }
 }
 
-// =============================================================================
-// Arweave Backend Implementation (Legacy - when ARWEAVE_ENABLED)
-// =============================================================================
-
-async function loadPromptsFromArweave(set: SetState, _get: GetState, password?: string): Promise<void> {
-  set({ loading: true, error: null });
-  try {
-    // Get wallet address for GraphQL query
-    const walletAddress = await getWalletAddress();
-    if (!walletAddress) {
-      console.warn('No wallet connected, loading from cache only');
-      const cached = getCachedPrompts();
-      const cachedPrompts = Object.values(cached);
-      indexPrompts(cachedPrompts);
-      set({ prompts: cachedPrompts, loading: false });
-      return;
-    }
-
-    console.log('Discovering prompts for wallet:', walletAddress);
-
-    // Query all user's prompts from Arweave via GraphQL
-    const discoveredTxIds = await queryAllUserPrompts(walletAddress);
-    console.log(`Discovered ${discoveredTxIds.length} prompts via GraphQL`);
-
-    if (discoveredTxIds.length === 0) {
-      set({ prompts: [], loading: false });
-      return;
-    }
-
-    const cached = getCachedPrompts();
-    const cachedPrompts: Prompt[] = [];
-    const toFetch: string[] = [];
-
-    // Check what we have cached
-    discoveredTxIds.forEach(txId => {
-      const cachedPrompt = Object.values(cached).find(p =>
-        p.currentTxId === txId || p.versions.some(v => v.txId === txId)
-      );
-
-      if (cachedPrompt) {
-        cachedPrompts.push(cachedPrompt);
-      } else {
-        toFetch.push(txId);
-      }
-    });
-
-    console.log(`Found ${cachedPrompts.length} in cache, fetching ${toFetch.length} from Arweave`);
-
-    // Fetch missing prompts from Arweave in parallel
-    if (toFetch.length > 0) {
-      const fetched = await Promise.all(
-        toFetch.map(txId => fetchPrompt(txId, password))
-      );
-
-      fetched.forEach(prompt => {
-        if (prompt) {
-          cachePrompt(prompt);
-          cachedPrompts.push(prompt);
-
-          const metadata: PromptMetadata = {
-            id: prompt.id,
-            title: prompt.title,
-            tags: prompt.tags,
-            currentTxId: prompt.currentTxId,
-            updatedAt: prompt.updatedAt,
-            isArchived: prompt.isArchived || false,
-          };
-          addPromptToProfile(metadata);
-        }
-      });
-    }
-
-    indexPrompts(cachedPrompts);
-    set({ prompts: cachedPrompts, loading: false });
-  } catch (error) {
-    console.error('Load prompts error:', error);
-    set({ error: 'Failed to load prompts', loading: false });
-  }
-}
-
-async function addPromptToArweave(
-  set: SetState,
-  get: GetState,
-  promptData: Omit<Prompt, 'id' | 'createdAt' | 'updatedAt'>,
-  password?: string
-): Promise<boolean> {
-  try {
-    const jwk = await getWalletJWK();
-
-    const prompt: Prompt = {
-      ...promptData,
-      id: crypto.randomUUID(),
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
-      currentTxId: '',
-      versions: [],
-      isArchived: false,
-      isSynced: false,
-    };
-
-    const result = await uploadPrompt(prompt, jwk, password);
-    if (!result.success) {
-      throw new Error(result.error || 'Upload failed');
-    }
-
-    const { onUploadStart } = get();
-    if (onUploadStart) {
-      onUploadStart(result.id, prompt.title);
-    }
-
-    prompt.currentTxId = result.id;
-    prompt.versions = [{
-      txId: result.id,
-      version: 1,
-      timestamp: Date.now(),
-    }];
-    prompt.isSynced = true;
-
-    cachePrompt(prompt);
-    const metadata: PromptMetadata = {
-      id: prompt.id,
-      title: prompt.title,
-      tags: prompt.tags,
-      currentTxId: prompt.currentTxId,
-      updatedAt: prompt.updatedAt,
-      isArchived: false,
-    };
-    addPromptToProfile(metadata);
-
-    addToIndex(prompt);
-    set(state => ({ prompts: [prompt, ...state.prompts] }));
-
-    return true;
-  } catch (error) {
-    console.error('Add prompt error:', error);
-    set({ error: 'Failed to create prompt' });
-    return false;
-  }
-}
-
-async function updatePromptInArweave(
-  set: SetState,
-  get: GetState,
-  id: string,
-  updates: Partial<Prompt>,
-  password?: string
-): Promise<boolean> {
-  try {
-    const state = get();
-    const existingPrompt = state.prompts.find(p => p.id === id);
-    if (!existingPrompt) {
-      throw new Error('Prompt not found');
-    }
-
-    const jwk = await getWalletJWK();
-
-    // Fetch fresh version history from Arweave before updating
-    let freshPrompt = existingPrompt;
-    if (existingPrompt.currentTxId) {
-      const fetched = await fetchPrompt(existingPrompt.currentTxId, password);
-      if (fetched) {
-        freshPrompt = fetched;
-      }
-    }
-
-    const updatedPrompt: Prompt = {
-      ...freshPrompt,
-      ...updates,
-      updatedAt: Date.now(),
-    };
-
-    const result = await uploadPrompt(updatedPrompt, jwk, password);
-    if (!result.success) {
-      throw new Error(result.error || 'Upload failed');
-    }
-
-    const { onUploadStart } = get();
-    if (onUploadStart) {
-      onUploadStart(result.id, updatedPrompt.title);
-    }
-
-    updatedPrompt.currentTxId = result.id;
-    const existingVersions = freshPrompt.versions && freshPrompt.versions.length > 0
-      ? freshPrompt.versions
-      : [{
-          txId: freshPrompt.currentTxId || '',
-          version: 1,
-          timestamp: freshPrompt.createdAt || Date.now(),
-        }];
-
-    const nextVersion = Math.max(...existingVersions.map(v => v.version || 1)) + 1;
-    updatedPrompt.versions = [
-      ...existingVersions,
-      {
-        txId: result.id,
-        version: nextVersion,
-        timestamp: Date.now(),
-        changeNote: updates.content ? 'Content updated' : 'Metadata updated',
-      },
-    ];
-    updatedPrompt.isSynced = true;
-
-    cachePrompt(updatedPrompt);
-    const metadata: PromptMetadata = {
-      id: updatedPrompt.id,
-      title: updatedPrompt.title,
-      tags: updatedPrompt.tags,
-      currentTxId: updatedPrompt.currentTxId,
-      updatedAt: updatedPrompt.updatedAt,
-      isArchived: updatedPrompt.isArchived,
-    };
-    addPromptToProfile(metadata);
-
-    addToIndex(updatedPrompt);
-    set(state => ({
-      prompts: state.prompts.map(p => p.id === id ? updatedPrompt : p),
-    }));
-
-    return true;
-  } catch (error) {
-    console.error('Update prompt error:', error);
-    set({ error: 'Failed to update prompt' });
-    return false;
-  }
-}
-
-async function archivePromptInArweave(
-  set: SetState,
-  get: GetState,
-  id: string,
-  password?: string
-): Promise<void> {
-  const prompt = get().prompts.find(p => p.id === id);
-  if (!prompt) return;
-
-  // Optimistically update UI immediately
-  archivePromptStorage(id);
-  removeFromIndex(id);
-  set(state => ({
-    prompts: state.prompts.map(p =>
-      p.id === id ? { ...p, isArchived: true } : p
-    ),
-  }));
-
-  // Upload to Arweave in background
-  try {
-    const jwk = await getWalletJWK();
-    const result = await updatePromptArchiveStatus(prompt, true, jwk, password);
-
-    if (result.success) {
-      const { onUploadStart } = get();
-      if (onUploadStart) {
-        onUploadStart(result.id, `${prompt.title} (archived)`);
-      }
-
-      const currentVersion = prompt.versions.length > 0
-        ? Math.max(...prompt.versions.map(v => v.version || 1))
-        : 1;
-      const updatedPrompt: Prompt = {
-        ...prompt,
-        isArchived: true,
-        currentTxId: result.id,
-        versions: [
-          ...prompt.versions,
-          {
-            txId: result.id,
-            version: currentVersion,
-            timestamp: Date.now(),
-            changeNote: 'Archived',
-          },
-        ],
-        isSynced: true,
-      };
-
-      cachePrompt(updatedPrompt);
-      const metadata: PromptMetadata = {
-        id: updatedPrompt.id,
-        title: updatedPrompt.title,
-        tags: updatedPrompt.tags,
-        currentTxId: updatedPrompt.currentTxId,
-        updatedAt: updatedPrompt.updatedAt,
-        isArchived: true,
-      };
-      addPromptToProfile(metadata);
-
-      set(state => ({
-        prompts: state.prompts.map(p =>
-          p.id === id ? updatedPrompt : p
-        ),
-      }));
-    }
-  } catch (error) {
-    console.error('Failed to archive prompt on Arweave:', error);
-  }
-}
-
-async function restorePromptInArweave(
-  set: SetState,
-  get: GetState,
-  id: string,
-  password?: string
-): Promise<void> {
-  const prompt = get().prompts.find(p => p.id === id);
-  if (!prompt) return;
-
-  // Optimistically update UI immediately
-  restorePromptStorage(id);
-  if (prompt) {
-    addToIndex({ ...prompt, isArchived: false });
-  }
-  set(state => ({
-    prompts: state.prompts.map(p =>
-      p.id === id ? { ...p, isArchived: false } : p
-    ),
-  }));
-
-  // Upload to Arweave in background
-  try {
-    const jwk = await getWalletJWK();
-    const result = await updatePromptArchiveStatus(prompt, false, jwk, password);
-
-    if (result.success) {
-      const { onUploadStart } = get();
-      if (onUploadStart) {
-        onUploadStart(result.id, `${prompt.title} (restored)`);
-      }
-
-      const currentVersion = prompt.versions.length > 0
-        ? Math.max(...prompt.versions.map(v => v.version || 1))
-        : 1;
-      const updatedPrompt: Prompt = {
-        ...prompt,
-        isArchived: false,
-        currentTxId: result.id,
-        versions: [
-          ...prompt.versions,
-          {
-            txId: result.id,
-            version: currentVersion,
-            timestamp: Date.now(),
-            changeNote: 'Restored from archive',
-          },
-        ],
-        isSynced: true,
-      };
-
-      cachePrompt(updatedPrompt);
-      const metadata: PromptMetadata = {
-        id: updatedPrompt.id,
-        title: updatedPrompt.title,
-        tags: updatedPrompt.tags,
-        currentTxId: updatedPrompt.currentTxId,
-        updatedAt: updatedPrompt.updatedAt,
-        isArchived: false,
-      };
-      addPromptToProfile(metadata);
-
-      set(state => ({
-        prompts: state.prompts.map(p =>
-          p.id === id ? updatedPrompt : p
-        ),
-      }));
-    }
-  } catch (error) {
-    console.error('Failed to restore prompt on Arweave:', error);
-  }
-}

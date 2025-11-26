@@ -1,7 +1,7 @@
 export type NotificationType = 'prompt' | 'collection';
 export type NotificationStatus = 'pending' | 'confirmed' | 'failed';
 
-export interface ArweaveNotification {
+export interface UploadNotification {
   id: string;
   type: NotificationType;
   txId: string;
@@ -13,6 +13,6 @@ export interface ArweaveNotification {
 }
 
 export interface NotificationState {
-  notifications: ArweaveNotification[];
+  notifications: UploadNotification[];
   unreadCount: number;
 }

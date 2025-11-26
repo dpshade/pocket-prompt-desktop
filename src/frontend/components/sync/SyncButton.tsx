@@ -1,29 +1,29 @@
-import { useState } from 'react';
-import { Cloud, Sparkles } from 'lucide-react';
-import { Button } from '@/frontend/components/ui/button';
+import { useState } from "react";
+import { Cloud, Sparkles } from "lucide-react";
+import { Button } from "@/frontend/components/ui/button";
 import {
   Dialog,
   DialogContent,
   DialogHeader,
   DialogTitle,
   DialogDescription,
-} from '@/frontend/components/ui/dialog';
-import { Input } from '@/frontend/components/ui/input';
+} from "@/frontend/components/ui/dialog";
+import { Input } from "@/frontend/components/ui/input";
 
 // Track sync button clicks in localStorage for validation
-const SYNC_CLICKS_KEY = 'pv_sync_intent_clicks';
+const SYNC_CLICKS_KEY = "pv_sync_intent_clicks";
 
 function trackSyncClick(): number {
-  const current = parseInt(localStorage.getItem(SYNC_CLICKS_KEY) || '0', 10);
+  const current = parseInt(localStorage.getItem(SYNC_CLICKS_KEY) || "0", 10);
   const newCount = current + 1;
   localStorage.setItem(SYNC_CLICKS_KEY, String(newCount));
-  console.log('[Validation] Sync intent clicked. Total:', newCount);
+  console.log("[Validation] Sync intent clicked. Total:", newCount);
   return newCount;
 }
 
 export function SyncButton() {
   const [showModal, setShowModal] = useState(false);
-  const [email, setEmail] = useState('');
+  const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);
 
@@ -39,10 +39,10 @@ export function SyncButton() {
     setLoading(true);
 
     // Log for validation - in production, send to backend/Typeform
-    console.log('[Waitlist] Cloud Sync interest:', email);
+    console.log("[Waitlist] Cloud Sync interest:", email);
 
     // Simulate API call
-    await new Promise(resolve => setTimeout(resolve, 500));
+    await new Promise((resolve) => setTimeout(resolve, 500));
 
     setSubmitted(true);
     setLoading(false);
@@ -52,7 +52,7 @@ export function SyncButton() {
     setShowModal(false);
     setTimeout(() => {
       setSubmitted(false);
-      setEmail('');
+      setEmail("");
     }, 200);
   };
 
@@ -62,7 +62,7 @@ export function SyncButton() {
         variant="outline"
         size="sm"
         onClick={handleClick}
-        className="gap-2 h-10 px-3 opacity-60 hover:opacity-80"
+        className="gap-2 h-10 px-3"
       >
         <Cloud className="h-4 w-4" />
         <span className="hidden sm:inline">Sync</span>
@@ -83,8 +83,18 @@ export function SyncButton() {
           {submitted ? (
             <div className="py-6 text-center space-y-4">
               <div className="mx-auto w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center">
-                <svg className="w-6 h-6 text-green-600 dark:text-green-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                <svg
+                  className="w-6 h-6 text-green-600 dark:text-green-400"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M5 13l4 4L19 7"
+                  />
                 </svg>
               </div>
               <div>
@@ -114,7 +124,8 @@ export function SyncButton() {
 
               <div className="rounded-lg bg-muted/50 p-4 text-center">
                 <p className="text-sm text-muted-foreground">
-                  Cloud sync is coming soon! Join the waitlist to get early access.
+                  Cloud sync is coming soon! Join the waitlist to get early
+                  access.
                 </p>
               </div>
 
@@ -128,7 +139,7 @@ export function SyncButton() {
                   className="w-full"
                 />
                 <Button type="submit" className="w-full" disabled={loading}>
-                  {loading ? 'Joining...' : 'Get Early Access'}
+                  {loading ? "Joining..." : "Get Early Access"}
                 </Button>
               </form>
 
@@ -143,7 +154,15 @@ export function SyncButton() {
   );
 }
 
-function Feature({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
+function Feature({
+  icon,
+  title,
+  description,
+}: {
+  icon: React.ReactNode;
+  title: string;
+  description: string;
+}) {
   return (
     <div className="flex items-start gap-3">
       <div className="mt-0.5 p-2 rounded-lg bg-primary/10 text-primary">

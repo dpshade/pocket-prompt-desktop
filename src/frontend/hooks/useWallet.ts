@@ -1,11 +1,6 @@
 import { create } from 'zustand';
-import {
-  checkWalletConnection,
-  getArweaveWallet,
-} from '@/backend/api/client';
 import { getProfile, initializeProfile } from '@/core/storage/cache';
 import type { ArNSWalletConnector, WALLET_TYPES } from '@/shared/types/wallet';
-import { WanderWalletConnector } from '@/backend/services/wallets';
 
 interface WalletState {
   address: string | null;
@@ -21,6 +16,13 @@ interface WalletState {
   setWallet: (connector: ArNSWalletConnector, address: string, walletType: WALLET_TYPES) => void;
 }
 
+/**
+ * Wallet hook (stub implementation)
+ *
+ * Wallet connection is disabled in local-first mode.
+ * The app uses device ID for identity instead of wallet addresses.
+ * This hook maintains API compatibility for potential future reconnection.
+ */
 export const useWallet = create<WalletState>((set, get) => ({
   address: null,
   connected: false,
@@ -30,38 +32,12 @@ export const useWallet = create<WalletState>((set, get) => ({
   wallet: null,
 
   /**
-   * Legacy connect method - attempts to connect via ArConnect/Wander (default wallet)
-   * This maintains backward compatibility with existing code
+   * Connect wallet (disabled)
    */
   connect: async () => {
-    set({ connecting: true, error: null });
-    try {
-      // Use WanderWalletConnector as the default (ArConnect compatible)
-      const connector = new WanderWalletConnector();
-      await connector.connect();
-      const address = await connector.getWalletAddress();
-
-      if (address) {
-        // Initialize or load profile
-        let profile = getProfile();
-        if (!profile || profile.address !== address) {
-          profile = initializeProfile(address);
-        }
-
-        set({
-          address,
-          connected: true,
-          connecting: false,
-          wallet: connector,
-          walletType: 'Wander' as any,
-        });
-      } else {
-        throw new Error('Failed to get wallet address');
-      }
-    } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'Failed to connect wallet';
-      set({ error: errorMessage, connecting: false, connected: false });
-    }
+    // Wallet connection disabled - using device ID for identity
+    console.log('[useWallet] Wallet connection disabled in local-first mode');
+    set({ error: 'Wallet connection is not available in local mode' });
   },
 
   /**
@@ -85,6 +61,9 @@ export const useWallet = create<WalletState>((set, get) => ({
     });
   },
 
+  /**
+   * Disconnect wallet
+   */
   disconnect: async () => {
     try {
       const { wallet } = get();
@@ -94,7 +73,6 @@ export const useWallet = create<WalletState>((set, get) => ({
         await wallet.disconnect();
       }
 
-      // Don't clear cache - keep prompts for next session
       set({
         address: null,
         connected: false,
@@ -113,33 +91,11 @@ export const useWallet = create<WalletState>((set, get) => ({
     }
   },
 
+  /**
+   * Check for existing connection (no-op in local mode)
+   */
   checkConnection: async () => {
-    try {
-      // Check for legacy ArConnect connection first
-      const isConnected = await checkWalletConnection();
-      if (isConnected) {
-        const arweaveWallet = getArweaveWallet();
-        if (arweaveWallet) {
-          const address = await arweaveWallet.getActiveAddress();
-          if (address) {
-            let profile = getProfile();
-            if (!profile || profile.address !== address) {
-              profile = initializeProfile(address);
-            }
-
-            // Restore WanderWalletConnector for legacy connections
-            const connector = new WanderWalletConnector();
-            set({
-              address,
-              connected: true,
-              wallet: connector,
-              walletType: 'Wander' as any,
-            });
-          }
-        }
-      }
-    } catch (error) {
-      console.error('Check connection error:', error);
-    }
+    // Wallet connection disabled - using device ID for identity
+    console.log('[useWallet] Connection check disabled in local-first mode');
   },
 }));

@@ -14,7 +14,7 @@
       {
         "title": "Prompt Vault",
         "label": "main",
-        "fullscreen": true,
+        "fullscreen": false,
         "resizable": true,
         "decorations": false,
         "transparent": false,
@@ -30,6 +30,11 @@
   "plugins": {
     "fs": {
       "requireLiteralLeadingDot": false
+    },
+    "deep-link": {
+      "desktop": {
+        "schemes": ["promptvault"]
+      }
     }
   },
   "bundle": {

@@ -1,11 +1,11 @@
 import { useState, useCallback, useEffect, useRef } from 'react';
-import type { ArweaveNotification, NotificationType } from '@/shared/types/notification';
+import type { UploadNotification, NotificationType } from '@/shared/types/notification';
 
 const STORAGE_KEY = 'pktpmt_notifications';
 const CHECK_INTERVAL_MS = 30000; // Check every 30 seconds
 
 interface UseNotificationsReturn {
-  notifications: ArweaveNotification[];
+  notifications: UploadNotification[];
   unreadCount: number;
   addNotification: (
     type: NotificationType,
@@ -21,7 +21,7 @@ interface UseNotificationsReturn {
 }
 
 /**
- * Hook for managing Arweave upload notifications
+ * Hook for managing upload notifications
  * - Tracks pending, confirmed, and failed uploads
  * - Automatically checks pending transactions via GraphQL
  * - Persists notifications in localStorage
@@ -30,7 +30,7 @@ export function useNotifications(
   walletAddress: string | null,
   checkPendingFn?: (txId: string) => Promise<boolean>
 ): UseNotificationsReturn {
-  const [notifications, setNotifications] = useState<ArweaveNotification[]>([]);
+  const [notifications, setNotifications] = useState<UploadNotification[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
   const checkIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -39,7 +39,7 @@ export function useNotifications(
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
       if (stored) {
-        const parsed = JSON.parse(stored) as ArweaveNotification[];
+        const parsed = JSON.parse(stored) as UploadNotification[];
         setNotifications(parsed);
 
         // Count unread (pending + recent confirmed/failed)
@@ -107,7 +107,7 @@ export function useNotifications(
    */
   const addNotification = useCallback(
     (type: NotificationType, txId: string, title: string, description?: string) => {
-      const notification: ArweaveNotification = {
+      const notification: UploadNotification = {
         id: crypto.randomUUID(),
         type,
         txId,

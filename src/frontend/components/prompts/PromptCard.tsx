@@ -222,7 +222,7 @@ export const PromptCard = memo(function PromptCard({ prompt, isCopied = false, o
                     <div className="border-t border-border my-1"></div>
                     <div className="text-yellow-500 flex items-center gap-1.5">
                       <span className="inline-block w-1.5 h-1.5 rounded-full bg-yellow-500"></span>
-                      <span className="text-[11px]">Not synced to Arweave</span>
+                      <span className="text-[11px]">Not synced</span>
                     </div>
                   </>
                 )}
