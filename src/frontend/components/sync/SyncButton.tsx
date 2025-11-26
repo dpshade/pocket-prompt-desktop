@@ -66,6 +66,9 @@ export function SyncButton() {
       >
         <Cloud className="h-4 w-4" />
         <span className="hidden sm:inline">Sync</span>
+        <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
+          soon
+        </span>
       </Button>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
