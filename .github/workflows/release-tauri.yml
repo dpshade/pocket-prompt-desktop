@@ -14,23 +14,29 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'macos-latest'
+          - name: 'macOS (Apple Silicon)'
+            runner: 'macos-latest'
             args: '--target aarch64-apple-darwin'
-          - platform: 'macos-latest'
+          - name: 'macOS (Intel)'
+            runner: 'macos-latest'
             args: '--target x86_64-apple-darwin'
-          - platform: 'ubuntu-22.04'
+          - name: 'Linux (x64)'
+            runner: 'ubuntu-22.04'
             args: ''
-          - platform: 'ubuntu-22.04-arm'
+          - name: 'Linux (ARM64)'
+            runner: 'ubuntu-22.04-arm'
             args: ''
-          - platform: 'windows-latest'
+          - name: 'Windows (x64)'
+            runner: 'windows-latest'
             args: ''
 
-    runs-on: ${{ matrix.platform }}
+    name: ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install dependencies (Ubuntu only)
-        if: startsWith(matrix.platform, 'ubuntu')
+      - name: Install dependencies (Linux only)
+        if: startsWith(matrix.runner, 'ubuntu')
         run: |
           sudo apt-get update
           sudo apt-get install -y libwebkit2gtk-4.1-dev libappindicator3-dev librsvg2-dev patchelf xdg-utils
@@ -41,7 +47,7 @@ jobs:
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
         with:
-          targets: ${{ matrix.platform == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
+          targets: ${{ matrix.runner == 'macos-latest' && 'aarch64-apple-darwin,x86_64-apple-darwin' || '' }}
 
       - name: Rust cache
         uses: swatinem/rust-cache@v2
