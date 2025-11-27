@@ -1321,13 +1321,7 @@ function App() {
               )}
 
               {/* Results Section - Scrollable */}
-              {loading ? (
-                <div className="flex justify-center py-3 border-t border-border/30">
-                  <div className="animate-spin w-4 h-4 border-2 border-primary/30 border-t-primary rounded-full" role="status">
-                    <span className="sr-only">Loading</span>
-                  </div>
-                </div>
-              ) : filteredPrompts.length === 0 && effectiveSearchQuery ? (
+              {!loading && filteredPrompts.length === 0 && effectiveSearchQuery ? (
                 <div className="text-center py-4 bg-card border-t border-border/30">
                   <p className="text-muted-foreground text-sm">No matches found.</p>
                 </div>
@@ -1398,13 +1392,7 @@ function App() {
 
             {/* Mobile Results */}
             <div className="sm:hidden mt-6">
-              {loading ? (
-                <div className="flex justify-center py-4">
-                  <div className="animate-spin w-5 h-5 border-2 border-primary/30 border-t-primary rounded-full" role="status">
-                    <span className="sr-only">Loading</span>
-                  </div>
-                </div>
-              ) : filteredPrompts.length === 0 && effectiveSearchQuery ? (
+              {!loading && filteredPrompts.length === 0 && effectiveSearchQuery ? (
                 <div className="text-center py-8">
                   <p className="text-muted-foreground text-sm">No matches.</p>
                 </div>
