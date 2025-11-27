@@ -47,7 +47,7 @@ const hotkeysSections: HotkeySection[] = [
 
 function KeyBadge({ children }: { children: React.ReactNode }) {
   return (
-    <kbd className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 text-sm font-medium bg-muted border border-border rounded shadow-sm">
+    <kbd className="inline-flex items-center justify-center min-w-[1.75rem] h-7 px-2 text-sm font-medium bg-muted rounded-lg shadow-soft">
       {children}
     </kbd>
   );
@@ -91,7 +91,7 @@ export function HotkeysDialog({ open, onOpenChange }: HotkeysDialogProps) {
               </div>
             </div>
           ))}
-          <p className="text-xs text-muted-foreground text-center pt-2 border-t border-border">
+          <p className="text-xs text-muted-foreground text-center pt-3">
             Press <KeyBadge>?</KeyBadge> anytime to show this dialog
           </p>
         </DialogBody>

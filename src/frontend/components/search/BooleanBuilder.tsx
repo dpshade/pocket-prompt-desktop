@@ -282,11 +282,11 @@ export function BooleanBuilder({
   const showTagToggle = displayedTags.length > 12;
 
   return (
-    <div className={embedded ? "" : "rounded-lg border border-border bg-card shadow-lg"}>
+    <div className={embedded ? "" : "rounded-3xl bg-card shadow-soft-lg"}>
       <div
         className={cn(
           "flex items-center gap-3 px-3 py-2.5",
-          embedded ? "border-t border-border" : "border-b border-border rounded-t-lg"
+          embedded ? "border-t border-border/30" : "pb-2.5 rounded-t-3xl"
         )}
       >
         <div className="flex items-center gap-2 text-sm font-medium text-foreground">
@@ -303,7 +303,7 @@ export function BooleanBuilder({
           {parsedExpression && !error && (
             <span className="hidden text-xs text-muted-foreground sm:inline-flex items-center gap-1">
               Press
-              <kbd className="rounded border border-border px-1 text-[10px] font-medium uppercase bg-muted">⏎</kbd>
+              <kbd className="rounded-md px-1.5 text-[10px] font-medium uppercase bg-muted shadow-soft">⏎</kbd>
               to apply
             </span>
           )}
@@ -370,7 +370,7 @@ export function BooleanBuilder({
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          <div className="inline-flex items-center gap-1 rounded-md border border-border/80 bg-muted/50 pr-1 text-xs text-muted-foreground">
+          <div className="inline-flex items-center gap-1 rounded-lg bg-muted/50 pr-1 text-xs text-muted-foreground shadow-soft">
             {['AND', 'OR', 'NOT'].map((operator) => (
               <Button
                 key={operator}
@@ -449,7 +449,7 @@ export function BooleanBuilder({
           </DialogHeader>
 
           <div className="space-y-3 text-sm">
-            <div className="flex items-center gap-2 rounded-md border border-border/70 bg-muted/60 px-3 py-2 text-xs font-medium text-muted-foreground">
+            <div className="flex items-center gap-2 rounded-lg bg-muted/60 px-3 py-2 text-xs font-medium text-muted-foreground shadow-soft">
               <code className="max-w-[60%] shrink truncate">{parsedExpression && expressionToString(parsedExpression)}</code>
               {searchQuery && (
                 <span className="truncate text-muted-foreground">+ "{searchQuery}"</span>

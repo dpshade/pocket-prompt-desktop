@@ -8,8 +8,8 @@ export default {
   ],
   theme: {
     fontFamily: {
-      sans: ['"Stack Sans Text"', 'system-ui', 'sans-serif'],
-      headline: ['"Stack Sans Headline"', 'system-ui', 'sans-serif'],
+      sans: ['Jost', 'system-ui', 'sans-serif'],
+      headline: ['Jost', 'system-ui', 'sans-serif'],
     },
     extend: {
       animation: {

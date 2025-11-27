@@ -48,14 +48,14 @@ export const PromptCard = memo(function PromptCard({ prompt, isCopied = false, o
 
   return (
     <Card
-      className="group cursor-pointer md:hover:shadow-lg md:hover:-translate-y-1 transition-all duration-200 active:scale-[0.98] h-[240px] flex flex-col relative [[data-selected='true']>&]:ring-2 [[data-selected='true']>&]:ring-primary [[data-selected='true']>&]:shadow-lg [[data-selected='true']>&]:-translate-y-1"
+      className="group cursor-pointer active:scale-[0.98] h-[240px] flex flex-col relative card-hoverable"
       onClick={handleCopy}
       title="Click to copy"
     >
       {/* Copy overlay */}
       {isCopied && (
         <div
-          className="absolute inset-0 bg-primary/25 backdrop-blur-[2px] rounded-lg z-10 flex items-center justify-center"
+          className="absolute inset-0 bg-primary/25 backdrop-blur-[2px] rounded-3xl z-10 flex items-center justify-center"
           style={{
             animation: 'fadeIn 0.15s ease-in, fadeOut 0.25s ease-out 1s forwards'
           }}
@@ -71,7 +71,7 @@ export const PromptCard = memo(function PromptCard({ prompt, isCopied = false, o
         <div className="flex items-start justify-between gap-2">
           <div className="flex-1 min-w-0">
             <div className="flex items-center gap-1.5">
-              <CardTitle className="text-sm truncate">{prompt.title}</CardTitle>
+              <CardTitle className="font-headline text-sm truncate">{prompt.title}</CardTitle>
               <span title={isPublic ? "Public prompt" : "Encrypted prompt"}>
                 {isPublic ? (
                   <Globe className="h-3 w-3 text-muted-foreground flex-shrink-0" />

@@ -154,7 +154,7 @@ export function PromptDialog({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent size="xl" className="flex max-h-[88vh] flex-col">
-        <DialogHeader className="space-y-4 text-left border-b">
+        <DialogHeader className="space-y-4 text-left border-b border-primary/20">
           <div className="flex flex-col gap-4">
               <div className="space-y-2">
                 <DialogTitle className="text-3xl sm:text-4xl font-semibold tracking-tight">
@@ -167,36 +167,7 @@ export function PromptDialog({
                 )}
               </div>
 
-              {prompt.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1.5">
-                  {prompt.tags.map(tag => (
-                    <Badge key={tag} variant="outline" className="text-xs px-3 py-1">
-                      {tag}
-                    </Badge>
-                  ))}
-                </div>
-              )}
-
             <div className="flex flex-wrap items-center gap-2">
-                {shareToken ? (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs bg-green-500/15 text-green-700 dark:text-green-400"
-                    title="This prompt has a shareable link"
-                  >
-                    <Link className="h-3.5 w-3.5" />
-                    Shared
-                  </Badge>
-                ) : (
-                  <Badge
-                    variant="secondary"
-                    className="flex items-center gap-1.5 px-3 py-1 text-xs"
-                    title="This prompt is private"
-                  >
-                    <Lock className="h-3.5 w-3.5" />
-                    Private
-                  </Badge>
-                )}
                 {hasVersionHistory(prompt) && (
                   <Badge variant="outline" className="px-3 py-1 text-xs">
                     v{prompt.versions[prompt.versions.length - 1]?.version}
@@ -210,29 +181,59 @@ export function PromptDialog({
               </div>
           </div>
 
-          <div className="flex flex-col gap-1 text-xs text-foreground/60">
-            <div>Created: <span className="font-medium text-foreground/80">{formatDate(prompt.createdAt)}</span></div>
-            <div>Last updated: <span className="font-medium text-foreground/80">{formatDate(prompt.updatedAt)}</span></div>
-
+          <div className="flex flex-col gap-2 text-xs text-foreground/60">
+            <div className="flex flex-col gap-1">
+              <div>Created: <span className="font-medium text-foreground/80">{formatDate(prompt.createdAt)}</span></div>
+              <div>Last updated: <span className="font-medium text-foreground/80">{formatDate(prompt.updatedAt)}</span></div>
+            </div>
+            {prompt.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {prompt.tags.map(tag => (
+                  <Badge key={tag} variant="outline" className="text-xs px-3 py-1">
+                    {tag}
+                  </Badge>
+                ))}
+              </div>
+            )}
           </div>
         </DialogHeader>
 
-        <DialogBody className="flex-1 overflow-y-auto min-h-0">
-          <div className="border rounded-xl p-5">
-            <div className="mb-3 flex flex-wrap items-center gap-3 text-xs text-foreground/50">
-              <span>{wordCount} words</span>
-              <span>•</span>
-              <span>{characterCount} characters</span>
-              <span>•</span>
-              <span>ID <code className="rounded bg-muted px-1.5 py-0.5 text-[11px]">{prompt.id}</code></span>
-            </div>
-            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed pr-1">
+        <DialogBody className="flex-1 min-h-0 flex flex-col">
+          <div className="mb-2 flex flex-wrap items-center gap-3 text-xs text-foreground/50 flex-shrink-0">
+            <span>{wordCount} words</span>
+            <span>•</span>
+            <span>{characterCount} characters</span>
+          </div>
+          <div className="border border-primary/20 bg-primary/[0.02] rounded-xl p-5 flex-1 min-h-0 flex flex-col">
+            <pre className="whitespace-pre-wrap font-mono text-sm leading-relaxed pr-1 overflow-y-auto flex-1 min-h-0">
               {typeof prompt.content === 'string' ? prompt.content : 'Encrypted content unavailable'}
             </pre>
           </div>
         </DialogBody>
 
-        <DialogFooter className="flex-row justify-end border-t">
+        <DialogFooter className="flex-row justify-between border-t border-primary/20">
+          <div className="flex items-center">
+            {shareToken ? (
+              <Badge
+                variant="secondary"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs bg-green-500/15 text-green-700 dark:text-green-400"
+                title="This prompt has a shareable link"
+              >
+                <Link className="h-3.5 w-3.5" />
+                Shared
+              </Badge>
+            ) : (
+              <Badge
+                variant="secondary"
+                className="flex items-center gap-1.5 px-3 py-1 text-xs"
+                title="Stored locally on your device — only you can access this prompt"
+              >
+                <Lock className="h-3.5 w-3.5" />
+                Private
+              </Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2">
           <Button
             variant="outline"
             onClick={handleCopy}
@@ -342,6 +343,7 @@ export function PromptDialog({
               <span className="hidden sm:inline">Archive</span>
             </Button>
           )}
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>

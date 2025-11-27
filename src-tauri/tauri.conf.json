@@ -16,7 +16,7 @@
         "label": "main",
         "fullscreen": false,
         "resizable": true,
-        "decorations": true,
+        "decorations": false,
         "transparent": false,
         "alwaysOnTop": false,
         "visible": true,

@@ -13,9 +13,7 @@ import { PasswordPrompt } from '@/frontend/components/wallet/PasswordPrompt';
 import { PasswordUnlock } from '@/frontend/components/wallet/PasswordUnlock';
 import { ThemeToggle } from '@/frontend/components/shared/ThemeToggle';
 import { HotkeysDialog } from '@/frontend/components/shared/HotkeysDialog';
-import { TeamsButton } from '@/frontend/components/waitlist/TeamsButton';
-import { TeamsWaitlistModal } from '@/frontend/components/waitlist/TeamsWaitlistModal';
-import { SyncButton } from '@/frontend/components/sync/SyncButton';
+import { ComingSoonButton } from '@/frontend/components/waitlist/ComingSoonButton';
 import { PublicPromptView } from '@/frontend/components/prompts/PublicPromptView';
 import { TursoSharedPromptView } from '@/frontend/components/prompts/TursoSharedPromptView';
 import { Button } from '@/frontend/components/ui/button';
@@ -114,7 +112,11 @@ function App() {
   const [passwordPromptOpen, setPasswordPromptOpen] = useState(false);
   const [passwordUnlockOpen, setPasswordUnlockOpen] = useState(false);
   const [sampleEncryptedData, setSampleEncryptedData] = useState<EncryptedData | null>(null);
-  const [selectedIndex, setSelectedIndex] = useState(0);
+  const [selectedIndex, setSelectedIndex] = useState(-1);
+  const [isKeyboardMode, setIsKeyboardMode] = useState(false);
+  const hoveredIndexRef = useRef<number>(-1);
+  const lastMousePosRef = useRef<{ x: number; y: number } | null>(null);
+  const mouseMovedSinceKeyboard = useRef(false);
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const searchBarRef = useRef<SearchBarHandle>(null);
   const desktopSearchBarContainerRef = useRef<HTMLDivElement>(null);
@@ -123,7 +125,6 @@ function App() {
   const previousIndexRef = useRef<number>(0);
   const passwordCheckDone = useRef(false);
   const [showFloatingNewButton, setShowFloatingNewButton] = useState(false);
-  const [teamsWaitlistOpen, setTeamsWaitlistOpen] = useState(false);
   const [hotkeysOpen, setHotkeysOpen] = useState(false);
   const newPromptButtonRef = useRef<HTMLButtonElement>(null);
 
@@ -860,65 +861,19 @@ function App() {
     setSelectedIndex(-1);
   }, [filteredPrompts.length, effectiveSearchQuery, selectedTags, booleanExpression, showArchived]);
 
-  // Scroll selected item into view
+  // Scroll selected item to center of screen during keyboard navigation
   useEffect(() => {
-    if (selectedIndex === -1) return;
+    if (selectedIndex === -1 || !isKeyboardMode) return;
 
     const selectedElement = document.querySelector(`[data-prompt-index="${selectedIndex}"]`);
     if (selectedElement) {
-      const previousIndex = previousIndexRef.current;
-      const lastIndex = filteredPrompts.length - 1;
-
-      // Detect wrap-around: jumped from last to first (navigating down)
-      const wrappedDown = previousIndex === lastIndex && selectedIndex === 0;
-
-      // Detect wrap-around: jumped from first to last (navigating up)
-      const wrappedUp = previousIndex === 0 && selectedIndex === lastIndex;
-
-      if (wrappedDown) {
-        // Just wrapped from last to first - stay at top (already there from wrap)
-        window.scrollTo({ top: 0, behavior: 'instant' });
-      } else if (wrappedUp || selectedIndex === lastIndex) {
-        // Wrapped from first to last, or navigated to last element - scroll to bottom
-        const maxScroll = Math.max(
-          document.body.scrollHeight,
-          document.documentElement.scrollHeight,
-          document.body.offsetHeight,
-          document.documentElement.offsetHeight
-        );
-        window.scrollTo({ top: maxScroll, behavior: 'instant' });
-      } else if (selectedIndex === 0) {
-        // At first element (not from wrap) - scroll to top
-        window.scrollTo({ top: 0, behavior: 'instant' });
-      } else {
-        // Otherwise, scroll element into view
-        selectedElement.scrollIntoView({ behavior: 'instant', block: 'nearest' });
-
-        const rect = selectedElement.getBoundingClientRect();
-        const headerHeight = 100; // Approximate height of sticky header + padding
-
-        // Check if element is behind the header (at top)
-        if (rect.top < headerHeight) {
-          const scrollAmount = rect.top - headerHeight - 20; // 20px extra padding, negative to scroll up
-          window.scrollBy({ top: scrollAmount, behavior: 'instant' });
-        }
-        // If floating search bar is visible (desktop, scrolled down), ensure element isn't behind it
-        else if (!isSearchBarVisible && window.innerWidth >= 640) {
-          const floatingSearchBarHeight = 160; // Approximate height of floating search bar + padding
-          const viewportBottom = window.innerHeight - floatingSearchBarHeight;
-
-          // If element bottom is below the visible area (behind floating search bar), scroll more
-          if (rect.bottom > viewportBottom) {
-            const scrollAmount = rect.bottom - viewportBottom + 20; // 20px extra padding
-            window.scrollBy({ top: scrollAmount, behavior: 'instant' });
-          }
-        }
-      }
+      // Always center the selected element in the viewport
+      selectedElement.scrollIntoView({ behavior: 'instant', block: 'center' });
 
       // Update previous index for next comparison
       previousIndexRef.current = selectedIndex;
     }
-  }, [selectedIndex, filteredPrompts.length, isSearchBarVisible]);
+  }, [selectedIndex, isKeyboardMode]);
 
   // Keyboard navigation
   useEffect(() => {
@@ -983,18 +938,27 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
+          mouseMovedSinceKeyboard.current = false; // Reset mouse movement tracking
+          // If coming from mouse mode, pick up from hovered position
+          if (!isKeyboardMode && hoveredIndexRef.current >= 0) {
+            setSelectedIndex(hoveredIndexRef.current);
+            setIsKeyboardMode(true);
+            break;
+          }
+          setIsKeyboardMode(true);
           // If in search input, go to first result
           if (isSearchInput) {
             setSelectedIndex(0);
             searchBarRef.current?.blurSearchInput();
           } else if (viewMode === 'list') {
             // List view: go to next item (wrap around at the end)
-            setSelectedIndex((prev) => (prev + 1) % numResults);
+            setSelectedIndex((prev) => (prev < 0 ? 0 : (prev + 1) % numResults));
           } else {
             // Grid view: go down one row
             setSelectedIndex((prev) => {
-              const next = prev + gridColumns;
-              return next < numResults ? next : prev;
+              const start = prev < 0 ? 0 : prev;
+              const next = start + gridColumns;
+              return next < numResults ? next : start;
             });
           }
           break;
@@ -1003,15 +967,24 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
+          mouseMovedSinceKeyboard.current = false; // Reset mouse movement tracking
+          // If coming from mouse mode, pick up from hovered position
+          if (!isKeyboardMode && hoveredIndexRef.current >= 0) {
+            setSelectedIndex(hoveredIndexRef.current);
+            setIsKeyboardMode(true);
+            break;
+          }
+          setIsKeyboardMode(true);
           // If in search input, go to last result
           if (isSearchInput) {
             setSelectedIndex(numResults - 1);
             searchBarRef.current?.blurSearchInput();
           } else if (viewMode === 'list') {
             // List view: if at top item (index 0), focus search input and unfocus results
-            if (selectedIndex === 0) {
+            if (selectedIndex <= 0) {
               searchBarRef.current?.focusSearchInput();
               setSelectedIndex(-1);
+              setIsKeyboardMode(false);
             } else {
               // Go to previous item
               setSelectedIndex((prev) => (prev - 1 + numResults) % numResults);
@@ -1036,6 +1009,7 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
+          mouseMovedSinceKeyboard.current = false; // Reset mouse movement tracking
           setSelectedIndex((prev) => {
             // Don't go left if we're at the first column
             const currentCol = prev % gridColumns;
@@ -1049,6 +1023,7 @@ function App() {
           if (blockingDialogOpen) return;
           if (!isSearchInput && isTyping) return;
           event.preventDefault();
+          mouseMovedSinceKeyboard.current = false; // Reset mouse movement tracking
           setSelectedIndex((prev) => {
             // Don't go right if we're at the last column or last item
             const currentCol = prev % gridColumns;
@@ -1148,6 +1123,35 @@ function App() {
     const prompt = prompts.find(p => p.id === id);
     if (prompt) handleCopy(prompt);
   }, [prompts]);
+
+  // Track actual mouse movement to distinguish from layout shifts
+  useEffect(() => {
+    const handleGlobalMouseMove = (e: MouseEvent) => {
+      const lastPos = lastMousePosRef.current;
+      if (lastPos) {
+        // Only count as movement if mouse moved more than 5px
+        const dx = Math.abs(e.clientX - lastPos.x);
+        const dy = Math.abs(e.clientY - lastPos.y);
+        if (dx > 5 || dy > 5) {
+          mouseMovedSinceKeyboard.current = true;
+        }
+      }
+      lastMousePosRef.current = { x: e.clientX, y: e.clientY };
+    };
+
+    window.addEventListener('mousemove', handleGlobalMouseMove);
+    return () => window.removeEventListener('mousemove', handleGlobalMouseMove);
+  }, []);
+
+  // Track hovered index via ref (no re-renders) for keyboard to pick up from
+  // Only exit keyboard mode when mouse has actually moved AND hovering a different item
+  const handleMouseEnterItem = useCallback((index: number) => {
+    hoveredIndexRef.current = index;
+    // Exit keyboard mode only if mouse actually moved and hovering a different item
+    if (isKeyboardMode && index !== selectedIndex && mouseMovedSinceKeyboard.current) {
+      setIsKeyboardMode(false);
+    }
+  }, [isKeyboardMode, selectedIndex]);
 
   const handleSave = async (data: Partial<Prompt>) => {
     if (editingPrompt) {
@@ -1273,8 +1277,7 @@ function App() {
               <div className="animate-spin inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full" role="status">
                 <span className="sr-only">Loading...</span>
               </div>
-              <img src="/logo.svg" alt="Pocket Prompt Logo" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-5 w-5 animate-pulse" />
-            </div>
+                          </div>
             <h1 className="text-3xl sm:text-4xl font-bold">Pocket Prompt</h1>
             <p className="text-muted-foreground text-sm sm:text-base">
               Setting up your prompt library...
@@ -1289,9 +1292,9 @@ function App() {
       {/* Header */}
       <header className="sticky top-0 z-50 pointer-events-none px-4 sm:px-6 lg:px-10 pt-[calc(env(safe-area-inset-top)+0.85rem)]">
         <div className="mx-auto max-w-6xl">
-          <div className="border border-border bg-card rounded-lg px-5 sm:px-6 py-4 sm:py-4 flex items-center justify-between gap-3 shadow-md pointer-events-auto">
+          <div className="bg-card rounded-3xl px-5 sm:px-6 py-4 sm:py-4 flex items-center justify-between gap-3 shadow-soft-lg pointer-events-auto" data-tauri-drag-region>
           <h1 className="flex items-center gap-2.5 sm:gap-2 text-lg font-bold sm:text-xl md:text-2xl">
-            <img src="/logo.svg" alt="Pocket Prompt Logo" className="h-6 w-6 sm:h-6 sm:w-6" />
+            <img src="/icon-48.png" alt="Pocket Prompt Logo" className="h-6 w-6 sm:h-6 sm:w-6" />
             <span className="sm:hidden">Pocket</span>
             <span className="hidden sm:inline">Pocket Prompt</span>
           </h1>
@@ -1317,16 +1320,9 @@ function App() {
 
             </TooltipProvider>
 
-            {/* Sync button (desktop app only) */}
-            {FEATURE_FLAGS.SHOW_SYNC_BUTTON && (
-              <div className="hidden sm:block">
-                <SyncButton />
-              </div>
-            )}
-
-            {/* Teams/Packs waitlist button */}
+            {/* Coming Soon features (Sync + Packs) */}
             <div className="hidden sm:block">
-              <TeamsButton onClick={() => setTeamsWaitlistOpen(true)} />
+              <ComingSoonButton />
             </div>
 
             {/* Desktop theme toggle */}
@@ -1348,12 +1344,12 @@ function App() {
       </header>
 
       {/* Main Content */}
-      <main className={`space-y-2 px-4 pt-6 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-10 lg:px-10 ${
+      <main className={`space-y-2 px-4 pt-4 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 lg:px-10 ${
         !isSearchBarVisible ? 'sm:pb-48' : 'sm:pb-12'
       }`}>
-        <section className="mx-auto flex max-w-6xl flex-col gap-4">
+        <section className="mx-auto flex max-w-6xl flex-col gap-10">
           {/* Desktop SearchBar - hidden on mobile, becomes fixed when scrolled past */}
-          <div ref={desktopSearchBarContainerRef} className="hidden sm:block">
+          <div ref={desktopSearchBarContainerRef} className="hidden sm:block relative">
             {/* Placeholder to maintain layout when search bar is fixed */}
             <div className={isSearchBarVisible ? 'hidden' : 'block'}>
               <div className="h-[120px]" /> {/* Approximate height of SearchBar */}
@@ -1363,10 +1359,10 @@ function App() {
               className={`transition-all duration-200 ease-out ${
                 isSearchBarVisible
                   ? ''
-                  : 'fixed inset-x-0 bottom-0 z-40 px-6 pb-6 lg:px-10'
+                  : 'fixed inset-x-0 bottom-0 z-[100] px-6 pb-6 lg:px-10'
               }`}
             >
-              <div className={isSearchBarVisible ? '' : 'mx-auto max-w-6xl shadow-2xl shadow-black/20 rounded-lg'}>
+              <div className={isSearchBarVisible ? '' : 'mx-auto max-w-6xl floating-searchbar-shadow rounded-lg'}>
                 <SearchBar
                   ref={searchBarRef}
                   showArchived={showArchived}
@@ -1383,28 +1379,27 @@ function App() {
             </div>
           </div>
           {showArchived && (
-            <div className="flex items-center gap-2 rounded-lg border border-border bg-card px-5 py-3 text-sm shadow-sm">
+            <div className="flex items-center gap-2 rounded-xl bg-card px-5 py-3 text-sm shadow-soft">
               <ArchiveIcon className="h-4 w-4 text-muted-foreground" />
               <span className="font-medium">Viewing archived prompts</span>
             </div>
           )}
           {showDuplicates && (
-            <div className="flex items-center gap-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-5 py-3 text-sm shadow-sm">
+            <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-5 py-3 text-sm shadow-soft">
               <Copy className="h-4 w-4 text-amber-600 dark:text-amber-400" />
               <span className="font-medium text-amber-700 dark:text-amber-300">Showing potential duplicates only</span>
             </div>
           )}
         </section>
 
-        <section className="mx-auto max-w-6xl">
+        <section className="mx-auto max-w-6xl relative z-50 mt-6">
         {loading ? (
           <div className="text-center py-12">
             <div className="relative inline-block">
               <div className="animate-spin inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full" role="status">
                 <span className="sr-only">Loading...</span>
               </div>
-              <img src="/logo.svg" alt="Pocket Prompt Logo" className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 h-5 w-5 animate-pulse" />
-            </div>
+                          </div>
             <p className="mt-4 text-muted-foreground animate-pulse">Fetching your prompts...</p>
           </div>
         ) : filteredPrompts.length === 0 ? (
@@ -1417,15 +1412,8 @@ function App() {
           </div>
         ) : (
           <>
-            <div className="mb-4 ml-1 text-sm text-muted-foreground">
-              Showing {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
-              {(() => {
-                const totalActive = prompts.filter(p => !p.isArchived).length;
-                return filteredPrompts.length !== totalActive && !showArchived ? ` of ${totalActive} total` : '';
-              })()}
-            </div>
             {viewMode === 'list' || window.innerWidth < 640 ? (
-          <div className="border border-border bg-card rounded-lg overflow-hidden">
+          <div className="bg-card rounded-3xl overflow-hidden shadow-soft-lg" data-keyboard-mode={isKeyboardMode}>
             {filteredPrompts.map((prompt, index) => (
               <PromptListItem
                 key={prompt.id}
@@ -1436,29 +1424,44 @@ function App() {
                 onArchive={handleArchiveById}
                 onRestore={handleRestoreById}
                 onCopyPrompt={handleCopyById}
+                onMouseEnter={() => handleMouseEnterItem(index)}
                 variant="pane"
                 data-prompt-index={index}
-                data-selected={index === selectedIndex}
+                data-selected={isKeyboardMode && index === selectedIndex}
               />
             ))}
           </div>
         ) : (
-          <div className="hidden sm:grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-            {filteredPrompts.map((prompt, index) => (
-              <div key={prompt.id} data-prompt-index={index} data-selected={index === selectedIndex}>
-                <PromptCard
-                  prompt={prompt}
-                  isCopied={copiedPromptId === prompt.id}
-                  onView={handleViewById}
-                  onEdit={handleEditById}
-                  onArchive={handleArchiveById}
-                  onRestore={handleRestoreById}
-                  onCopyPrompt={handleCopyById}
-                />
-              </div>
-            ))}
+          <div className="hidden sm:block" data-keyboard-mode={isKeyboardMode}>
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+              {filteredPrompts.map((prompt, index) => (
+                <div
+                  key={prompt.id}
+                  data-prompt-index={index}
+                  data-selected={isKeyboardMode && index === selectedIndex}
+                  onMouseEnter={() => handleMouseEnterItem(index)}
+                >
+                  <PromptCard
+                    prompt={prompt}
+                    isCopied={copiedPromptId === prompt.id}
+                    onView={handleViewById}
+                    onEdit={handleEditById}
+                    onArchive={handleArchiveById}
+                    onRestore={handleRestoreById}
+                    onCopyPrompt={handleCopyById}
+                  />
+                </div>
+              ))}
+            </div>
           </div>
         )}
+            <div className="mt-4 text-center text-xs text-muted-foreground">
+              {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
+              {(() => {
+                const totalActive = prompts.filter(p => !p.isArchived).length;
+                return filteredPrompts.length !== totalActive && !showArchived ? ` of ${totalActive}` : '';
+              })()}
+            </div>
           </>
         )}
         </section>
@@ -1466,8 +1469,8 @@ function App() {
 
       {/* Floating Search Bar - Mobile */}
       <div className="pointer-events-none sm:hidden">
-        <div className="fixed inset-x-0 bottom-0 z-40 flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
-          <div className="pointer-events-auto w-full max-w-2xl">
+        <div className="fixed inset-x-0 bottom-0 z-[100] flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
+          <div className="pointer-events-auto w-full max-w-2xl floating-searchbar-shadow rounded-lg">
             <SearchBar
               showArchived={showArchived}
               setShowArchived={setShowArchived}
@@ -1486,14 +1489,14 @@ function App() {
       {/* Floating Action Button - hidden on desktop when search bar is floating */}
       <Button
         onClick={handleCreateNew}
-        size="lg"
-        className={`fixed bottom-6 right-6 sm:bottom-6 sm:right-6 rounded-full shadow-xl hover:shadow-2xl transition-all hover:scale-110 active:scale-95 z-50 h-16 w-16 sm:h-14 sm:w-14 md:h-12 md:w-auto md:px-6 flex items-center justify-center ${
+        size="sm"
+        className={`fixed bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 z-50 h-9 px-3 flex items-center justify-center gap-1 ${
           !isSearchBarVisible ? 'sm:hidden' : ''
         }`}
         title="Create prompt"
       >
-        <Plus className="h-7 w-7 sm:h-6 sm:w-6 md:mr-2 flex-shrink-0" />
-        <span className="hidden md:inline font-semibold">Prompt</span>
+        <Plus className="h-4 w-4" />
+        <span className="font-medium text-sm">Prompt</span>
       </Button>
 
       {/* Dialogs */}
@@ -1543,11 +1546,6 @@ function App() {
         sampleEncryptedData={sampleEncryptedData}
         onPasswordUnlock={handlePasswordUnlock}
         onCancel={() => setPasswordUnlockOpen(false)}
-      />
-
-      <TeamsWaitlistModal
-        open={teamsWaitlistOpen}
-        onOpenChange={setTeamsWaitlistOpen}
       />
 
       <HotkeysDialog

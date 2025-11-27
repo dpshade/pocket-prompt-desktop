@@ -98,9 +98,9 @@ const DialogContent = React.forwardRef<
         <div
           ref={ref}
           className={cn(
-            "relative grid w-full gap-0 bg-background border rounded-lg shadow-lg px-0 py-0 overflow-hidden",
+            "relative grid w-full gap-0 bg-background rounded-3xl shadow-soft-lg px-0 py-0 overflow-hidden",
             dialogSizeClasses[size],
-            position === 'bottom' && 'pointer-events-auto max-w-4xl translate-y-0 rounded-t-lg rounded-b-md pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
+            position === 'bottom' && 'pointer-events-auto max-w-4xl translate-y-0 rounded-t-3xl rounded-b-2xl pb-[calc(env(safe-area-inset-bottom)+1.5rem)]',
             className
           )}
           onClick={(e) => e.stopPropagation()}

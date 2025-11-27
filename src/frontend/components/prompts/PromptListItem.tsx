@@ -51,15 +51,19 @@ export const PromptListItem = memo(function PromptListItem({ prompt, isCopied = 
 
   const containerClass = variant === 'pane'
     ? cn(
-        'group relative border-b border-border py-5 px-5 sm:py-4 sm:px-4 md:hover:bg-muted/50 transition-colors cursor-pointer overflow-hidden',
-        !isCopied && isSelected
-          ? 'bg-primary/3 border-l-4 border-l-primary'
-          : '',
+        'group relative py-5 px-5 sm:py-4 sm:px-4 cursor-pointer',
+        // CSS hover class (controlled by parent's data-keyboard-mode)
+        !isCopied && 'list-item-hoverable',
+        // Keyboard selection - uses identical CSS to hover
+        !isCopied && isSelected && 'list-item-selected',
         className,
       )
     : cn(
-        'group relative bg-card rounded-3xl sm:rounded-2xl py-5 px-5 sm:py-4 sm:px-5 cursor-pointer overflow-hidden shadow-sm md:hover:shadow-lg border border-border',
-        !isCopied && isSelected ? 'ring-2 ring-primary shadow-lg' : '',
+        'group relative bg-card rounded-3xl py-5 px-5 sm:py-4 sm:px-5 cursor-pointer overflow-hidden shadow-soft',
+        // CSS hover class (controlled by parent's data-keyboard-mode)
+        !isCopied && 'card-hoverable',
+        // Keyboard selection - uses identical CSS to hover
+        !isCopied && isSelected && 'card-selected',
         className,
       );
 
@@ -111,7 +115,7 @@ export const PromptListItem = memo(function PromptListItem({ prompt, isCopied = 
                   <Lock className="h-4 w-4 text-muted-foreground" />
                 )}
               </span>
-              <h3 className="text-base font-semibold sm:text-base sm:font-medium text-primary [@media(hover:hover)]:hover:underline truncate">
+              <h3 className="font-headline text-base font-semibold sm:text-base sm:font-medium text-primary [@media(hover:hover)]:hover:underline truncate">
                 {prompt.title}
               </h3>
             </div>

@@ -240,7 +240,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
   return (
     <>
-      <div className="border border-border bg-card rounded-lg relative px-5 py-4 sm:px-4 sm:py-3 space-y-3 shadow-sm">
+      <div className="bg-gradient-to-b from-white to-[#faf8fc] dark:from-[#161418] dark:to-[#131115] rounded-3xl relative px-5 py-4 sm:px-4 sm:py-3 space-y-3 shadow-soft ring-1 ring-primary/10">
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 sm:left-3 top-1/2 h-5 w-5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
 
@@ -302,7 +302,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
         {!booleanExpression && !showBooleanBuilder && (
           <>
             <div
-              className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground cursor-pointer pt-2 border-t border-border"
+              className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground cursor-pointer pt-3"
               onClick={() => {
                 const newValue = !showTagSuggestions;
                 setShowTagSuggestions(newValue);
@@ -395,7 +395,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
         {booleanExpression && !showBooleanBuilder && (
           <div
-            className="flex items-center gap-2 text-sm cursor-pointer transition-colors border-t border-border pt-3 pb-4 -mx-5 -mb-4 sm:-mx-4 sm:-mb-3 px-9 sm:px-8 bg-muted/50 rounded-b-lg"
+            className="flex items-center gap-2 text-sm cursor-pointer transition-colors pt-3 pb-4 -mx-5 -mb-4 sm:-mx-4 sm:-mb-3 px-9 sm:px-8 bg-muted/50 rounded-b-3xl"
             onClick={() => {
               setExpressionText(expressionToString(booleanExpression));
               setShowBooleanBuilder(true);

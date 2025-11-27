@@ -39,10 +39,9 @@ export function VersionHistory({
   // Cache for fetched version content
   const contentCacheRef = useRef<Map<string, string>>(new Map());
 
-  if (!prompt) return null;
-
   // Deduplicate versions - keep only the latest transaction for each version number
-  const uniqueVersions = prompt.versions.reduce((acc: PromptVersion[], curr: PromptVersion) => {
+  // Must compute before useCallback to maintain stable hook order
+  const uniqueVersions = prompt?.versions.reduce((acc: PromptVersion[], curr: PromptVersion) => {
     const existingIndex = acc.findIndex(v => v.version === curr.version);
     if (existingIndex === -1) {
       acc.push(curr);
@@ -52,12 +51,14 @@ export function VersionHistory({
       }
     }
     return acc;
-  }, []);
+  }, []) ?? [];
 
   // Sort by version number ascending (oldest first)
   uniqueVersions.sort((a, b) => a.version - b.version);
 
   const handleViewVersion = useCallback(async (version: PromptVersion, index: number) => {
+    if (!prompt) return;
+
     // Toggle off if clicking the same version
     if (selectedVersionTxId === version.txId) {
       setSelectedVersionTxId(null);
@@ -115,6 +116,8 @@ export function VersionHistory({
       setLoading(false);
     }
   }, [selectedVersionTxId, prompt, uniqueVersions]);
+
+  if (!prompt) return null;
 
   const formatDate = (timestamp: number) => {
     return new Date(timestamp).toLocaleString('en-US', {
