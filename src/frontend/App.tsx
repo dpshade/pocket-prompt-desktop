@@ -26,7 +26,7 @@ import { FEATURE_FLAGS } from '@/shared/config/features';
 import { useInitializeTheme } from '@/frontend/hooks/useTheme';
 import { useCollections } from '@/frontend/hooks/useCollections';
 import type { Prompt, PromptVersion } from '@/shared/types/prompt';
-import { searchPrompts } from '@/core/search';
+import { searchPrompts, simpleTitleSearch } from '@/core/search';
 import { evaluateExpression, expressionToString } from '@/core/search/boolean';
 import type { FileImportResult } from '@/shared/utils/import';
 import { getViewMode, saveViewMode, hasEncryptedPromptsInCache } from '@/core/storage/cache';
@@ -120,13 +120,10 @@ function App() {
   const [copiedPromptId, setCopiedPromptId] = useState<string | null>(null);
   const searchBarRef = useRef<SearchBarHandle>(null);
   const desktopSearchBarContainerRef = useRef<HTMLDivElement>(null);
-  const [isSearchBarVisible, setIsSearchBarVisible] = useState(true);
   const [deepLinkInitialized, setDeepLinkInitialized] = useState(false);
   const previousIndexRef = useRef<number>(0);
   const passwordCheckDone = useRef(false);
-  const [showFloatingNewButton, setShowFloatingNewButton] = useState(false);
   const [hotkeysOpen, setHotkeysOpen] = useState(false);
-  const newPromptButtonRef = useRef<HTMLButtonElement>(null);
 
   // Track grid columns for keyboard navigation
   const [gridColumns, setGridColumns] = useState(1);
@@ -737,25 +734,24 @@ function App() {
   // Filter prompts based on search and tags (memoized for performance)
   // Uses effectiveSearchQuery: deferred for typing (smooth), instant for clearing
   const filteredPrompts = useMemo(() => {
-    console.log('[App] Filtering prompts:', {
-      totalPrompts: prompts.length,
-      effectiveSearchQuery,
-      searchQuery,
-      booleanExpression,
-      showArchived,
-      showDuplicates,
-      selectedTags
-    });
-    
-    // Get search results with scores for sorting
-    const searchResults = effectiveSearchQuery ? searchPrompts(effectiveSearchQuery) : [];
+    const queryLength = effectiveSearchQuery.trim().length;
+
+    // Default: show no results unless there's a search query or active filter
+    const hasActiveFilter = booleanExpression || selectedTags.length > 0 || showDuplicates || showArchived;
+    if (!effectiveSearchQuery && !hasActiveFilter) {
+      return [];
+    }
+
+    // Get search results based on query length:
+    // - 1-3 chars: simple O(n) title matching
+    // - 4+ chars: FlexSearch
+    let searchResults: { id: string; score: number }[] = [];
+    if (effectiveSearchQuery) {
+      searchResults = queryLength <= 3
+        ? simpleTitleSearch(prompts, effectiveSearchQuery)
+        : searchPrompts(effectiveSearchQuery);
+    }
     const searchScoreMap = new Map(searchResults.map(r => [r.id, r.score]));
-    
-    console.log('[App] Search results:', {
-      query: effectiveSearchQuery,
-      resultCount: searchResults.length,
-      results: searchResults.slice(0, 5) // First 5 for debugging
-    });
 
     const finalResult = prompts
       .filter(prompt => {
@@ -788,72 +784,17 @@ function App() {
         return true;
       })
       .sort((a, b) => {
-        // When searching, sort by FlexSearch relevance score
+        // When searching, sort by relevance score
         if (effectiveSearchQuery && searchScoreMap.size > 0) {
           return (searchScoreMap.get(b.id) || 0) - (searchScoreMap.get(a.id) || 0);
         }
         // Default sort by updatedAt (most recent first) - use pre-computed timestamps
         return (timestampMap.get(b.id) || 0) - (timestampMap.get(a.id) || 0);
       });
-    
-    console.log('[App] Final filtered prompts:', {
-      beforeFilter: prompts.length,
-      afterFilter: finalResult.length,
-      effectiveSearchQuery,
-      hasBooleanExpression: !!booleanExpression,
-      showArchived,
-      showDuplicates
-    });
-    
+
     return finalResult;
-  }, [prompts, effectiveSearchQuery, showArchived, duplicateIds, booleanExpression, selectedTags, timestampMap]);
+  }, [prompts, effectiveSearchQuery, showArchived, duplicateIds, booleanExpression, selectedTags, timestampMap, showDuplicates]);
 
-  // Observe New Prompt button visibility to show floating version in header
-  useEffect(() => {
-    if (!newPromptButtonRef.current) return;
-
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        // Show floating button when original is not visible
-        setShowFloatingNewButton(!entry.isIntersecting);
-      },
-      {
-        threshold: 0,
-        rootMargin: '-80px 0px 0px 0px', // Account for sticky header height
-      }
-    );
-
-    observer.observe(newPromptButtonRef.current);
-
-    return () => observer.disconnect();
-  }, [filteredPrompts.length]);
-
-  // Track desktop SearchBar visibility to show floating version when scrolled past
-  const wasSearchBarVisibleRef = useRef(true);
-  useEffect(() => {
-    const checkSearchBarVisibility = () => {
-      if (!desktopSearchBarContainerRef.current) return;
-
-      const rect = desktopSearchBarContainerRef.current.getBoundingClientRect();
-      // Consider invisible when the bottom of the search bar is above the header (80px)
-      const isVisible = rect.bottom > 80;
-
-      // If transitioning from floating (invisible) back to normal (visible), scroll to top
-      if (isVisible && !wasSearchBarVisibleRef.current) {
-        window.scrollTo({ top: 0, behavior: 'instant' });
-      }
-
-      wasSearchBarVisibleRef.current = isVisible;
-      setIsSearchBarVisible(isVisible);
-    };
-
-    // Check on scroll
-    window.addEventListener('scroll', checkSearchBarVisibility, { passive: true });
-    // Initial check
-    checkSearchBarVisibility();
-
-    return () => window.removeEventListener('scroll', checkSearchBarVisibility);
-  }, []);
 
   // Reset selected index when filtered prompts change
   // Use effectiveSearchQuery to stay in sync with filtering
@@ -1289,182 +1230,214 @@ function App() {
 
   return (
     <div className="min-h-screen bg-background">
-      {/* Header */}
-      <header className="sticky top-0 z-50 pointer-events-none px-4 sm:px-6 lg:px-10 pt-[calc(env(safe-area-inset-top)+0.85rem)]">
-        <div className="mx-auto max-w-6xl">
-          <div className="bg-card rounded-3xl px-5 sm:px-6 py-4 sm:py-4 flex items-center justify-between gap-3 shadow-soft-lg pointer-events-auto" data-tauri-drag-region>
-          <h1 className="flex items-center gap-2.5 sm:gap-2 text-lg font-bold sm:text-xl md:text-2xl">
-            <img src="/icon-48.png" alt="Pocket Prompt Logo" className="h-6 w-6 sm:h-6 sm:w-6" />
-            <span className="sm:hidden">Pocket</span>
-            <span className="hidden sm:inline">Pocket Prompt</span>
-          </h1>
+      {/* Minimal Header - Action buttons only */}
+      <header className="fixed top-0 right-0 z-50 pointer-events-none px-4 sm:px-6 lg:px-10 pt-[calc(env(safe-area-inset-top)+0.85rem)]" data-tauri-drag-region>
+        <div className="flex items-center gap-2 pointer-events-auto">
+          {/* Desktop buttons */}
+          <TooltipProvider>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setUploadDialogOpen(true)}
+                  className="hidden sm:flex h-10 w-10 rounded-full"
+                >
+                  <Download className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                <p>Import/Export</p>
+              </TooltipContent>
+            </Tooltip>
+          </TooltipProvider>
 
-          <div className="flex items-center gap-2 sm:gap-2">
-            {/* Desktop buttons - hidden on mobile */}
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => setUploadDialogOpen(true)}
-                    className="hidden sm:flex h-10 w-10 rounded-full"
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>Import/Export</p>
-                </TooltipContent>
-              </Tooltip>
-
-            </TooltipProvider>
-
-            {/* Coming Soon features (Sync + Packs) */}
-            <div className="hidden sm:block">
-              <ComingSoonButton />
-            </div>
-
-            {/* Desktop theme toggle */}
-            <div className="hidden sm:block">
-              <ThemeToggle />
-            </div>
-
-            {FEATURE_FLAGS.WALLET_CONNECTION && (
-              <WalletButton onSetPassword={() => setPasswordPromptOpen(true)} />
-            )}
-
-            {/* Mobile menu - shown only on mobile */}
-            <MobileMenu
-              onUploadClick={() => setUploadDialogOpen(true)}
-            />
+          {/* Coming Soon features (Sync + Packs) */}
+          <div className="hidden sm:block">
+            <ComingSoonButton />
           </div>
-        </div>
+
+          {/* Desktop theme toggle */}
+          <div className="hidden sm:block">
+            <ThemeToggle />
+          </div>
+
+          {FEATURE_FLAGS.WALLET_CONNECTION && (
+            <WalletButton onSetPassword={() => setPasswordPromptOpen(true)} />
+          )}
+
+          {/* Mobile menu - shown only on mobile */}
+          <MobileMenu
+            onUploadClick={() => setUploadDialogOpen(true)}
+          />
         </div>
       </header>
 
-      {/* Main Content */}
-      <main className={`space-y-2 px-4 pt-4 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:px-6 sm:pt-6 lg:px-10 ${
-        !isSearchBarVisible ? 'sm:pb-48' : 'sm:pb-12'
-      }`}>
-        <section className="mx-auto flex max-w-6xl flex-col gap-10">
-          {/* Desktop SearchBar - hidden on mobile, becomes fixed when scrolled past */}
-          <div ref={desktopSearchBarContainerRef} className="hidden sm:block relative">
-            {/* Placeholder to maintain layout when search bar is fixed */}
-            <div className={isSearchBarVisible ? 'hidden' : 'block'}>
-              <div className="h-[120px]" /> {/* Approximate height of SearchBar */}
-            </div>
-            {/* Actual SearchBar - fixed when scrolled past */}
-            <div
-              className={`transition-all duration-200 ease-out ${
-                isSearchBarVisible
-                  ? ''
-                  : 'fixed inset-x-0 bottom-0 z-[100] px-6 pb-6 lg:px-10'
-              }`}
-            >
-              <div className={isSearchBarVisible ? '' : 'mx-auto max-w-6xl floating-searchbar-shadow rounded-lg'}>
-                <SearchBar
-                  ref={searchBarRef}
-                  showArchived={showArchived}
-                  setShowArchived={setShowArchived}
-                  viewMode={viewMode}
-                  onViewModeToggle={toggleViewMode}
-                  showDuplicates={showDuplicates}
-                  setShowDuplicates={setShowDuplicates}
-                  collections={collections}
-                  showNewPromptButton={!isSearchBarVisible}
-                  onCreateNew={handleCreateNew}
-                />
-              </div>
-            </div>
-          </div>
-          {showArchived && (
-            <div className="flex items-center gap-2 rounded-xl bg-card px-5 py-3 text-sm shadow-soft">
-              <ArchiveIcon className="h-4 w-4 text-muted-foreground" />
-              <span className="font-medium">Viewing archived prompts</span>
-            </div>
-          )}
-          {showDuplicates && (
-            <div className="flex items-center gap-2 rounded-xl bg-amber-500/10 px-5 py-3 text-sm shadow-soft">
-              <Copy className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-              <span className="font-medium text-amber-700 dark:text-amber-300">Showing potential duplicates only</span>
-            </div>
-          )}
-        </section>
-
-        <section className="mx-auto max-w-6xl relative z-50 mt-6">
-        {loading ? (
-          <div className="text-center py-12">
-            <div className="relative inline-block">
-              <div className="animate-spin inline-block w-12 h-12 border-4 border-primary/30 border-t-primary rounded-full" role="status">
-                <span className="sr-only">Loading...</span>
-              </div>
-                          </div>
-            <p className="mt-4 text-muted-foreground animate-pulse">Fetching your prompts...</p>
-          </div>
-        ) : filteredPrompts.length === 0 ? (
-          <div className="text-center py-12 space-y-4">
-            <p className="text-muted-foreground text-lg">
-              {prompts.length === 0
-                ? "No prompts yet. Click the + button to create your first prompt!"
-                : 'No prompts match your search. Try different filters?'}
-            </p>
-          </div>
-        ) : (
-          <>
-            {viewMode === 'list' || window.innerWidth < 640 ? (
-          <div className="bg-card rounded-3xl overflow-hidden shadow-soft-lg" data-keyboard-mode={isKeyboardMode}>
-            {filteredPrompts.map((prompt, index) => (
-              <PromptListItem
-                key={prompt.id}
-                prompt={prompt}
-                isCopied={copiedPromptId === prompt.id}
-                onView={handleViewById}
-                onEdit={handleEditById}
-                onArchive={handleArchiveById}
-                onRestore={handleRestoreById}
-                onCopyPrompt={handleCopyById}
-                onMouseEnter={() => handleMouseEnterItem(index)}
-                variant="pane"
-                data-prompt-index={index}
-                data-selected={isKeyboardMode && index === selectedIndex}
+      {/* Main Content - Search Engine Style */}
+      <main className="min-h-screen px-4 sm:px-6 lg:px-10 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:pb-6 flex flex-col justify-center">
+        <div className="mx-auto w-full max-w-2xl">
+          {/* Search Container - Logo + Search + Results */}
+          <div className="flex flex-col">
+            {/* Logo Section */}
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <img
+                src="/icon-48.png"
+                alt="Pocket Prompt Logo"
+                className="h-6 w-6 sm:h-7 sm:w-7"
               />
-            ))}
-          </div>
-        ) : (
-          <div className="hidden sm:block" data-keyboard-mode={isKeyboardMode}>
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-              {filteredPrompts.map((prompt, index) => (
-                <div
-                  key={prompt.id}
-                  data-prompt-index={index}
-                  data-selected={isKeyboardMode && index === selectedIndex}
-                  onMouseEnter={() => handleMouseEnterItem(index)}
-                >
-                  <PromptCard
-                    prompt={prompt}
-                    isCopied={copiedPromptId === prompt.id}
-                    onView={handleViewById}
-                    onEdit={handleEditById}
-                    onArchive={handleArchiveById}
-                    onRestore={handleRestoreById}
-                    onCopyPrompt={handleCopyById}
-                  />
+              <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight">
+                Pocket Prompt
+              </h1>
+            </div>
+
+            {/* Desktop SearchBar + Results - Single Unified Container */}
+            <div ref={desktopSearchBarContainerRef} className="hidden sm:block rounded-2xl shadow-soft-lg overflow-hidden ring-1 ring-primary/10">
+              <SearchBar
+                ref={searchBarRef}
+                showArchived={showArchived}
+                setShowArchived={setShowArchived}
+                viewMode={viewMode}
+                onViewModeToggle={toggleViewMode}
+                showDuplicates={showDuplicates}
+                setShowDuplicates={setShowDuplicates}
+                collections={collections}
+                showNewPromptButton={true}
+                onCreateNew={handleCreateNew}
+                connectedBottom={!loading && filteredPrompts.length > 0 && viewMode === 'list'}
+              />
+
+              {/* Status Indicators */}
+              {showArchived && (
+                <div className="flex items-center gap-2 bg-card/80 px-4 py-1.5 text-xs border-t border-border/30">
+                  <ArchiveIcon className="h-3 w-3 text-muted-foreground" />
+                  <span className="font-medium">Viewing archived</span>
                 </div>
-              ))}
+              )}
+              {showDuplicates && (
+                <div className="flex items-center gap-2 bg-amber-500/10 px-4 py-1.5 text-xs border-t border-border/30">
+                  <Copy className="h-3 w-3 text-amber-600 dark:text-amber-400" />
+                  <span className="font-medium text-amber-700 dark:text-amber-300">Showing duplicates</span>
+                </div>
+              )}
+
+              {/* Results Section - Scrollable */}
+              {loading ? (
+                <div className="text-center py-6 bg-card border-t border-border/30">
+                  <div className="animate-spin inline-block w-6 h-6 border-2 border-primary/30 border-t-primary rounded-full" role="status">
+                    <span className="sr-only">Loading...</span>
+                  </div>
+                  <p className="mt-2 text-muted-foreground text-xs animate-pulse">Loading...</p>
+                </div>
+              ) : filteredPrompts.length === 0 && effectiveSearchQuery ? (
+                <div className="text-center py-4 bg-card border-t border-border/30">
+                  <p className="text-muted-foreground text-sm">No matches found.</p>
+                </div>
+              ) : filteredPrompts.length > 0 ? (
+                <>
+                  {viewMode === 'list' ? (
+                    <div className="bg-card border-t border-border/30" data-keyboard-mode={isKeyboardMode}>
+                      <div className="max-h-[300px] overflow-y-auto">
+                        {filteredPrompts.map((prompt, index) => (
+                          <PromptListItem
+                            key={prompt.id}
+                            prompt={prompt}
+                            isCopied={copiedPromptId === prompt.id}
+                            onView={handleViewById}
+                            onEdit={handleEditById}
+                            onArchive={handleArchiveById}
+                            onRestore={handleRestoreById}
+                            onCopyPrompt={handleCopyById}
+                            onMouseEnter={() => handleMouseEnterItem(index)}
+                            variant="pane"
+                            data-prompt-index={index}
+                            data-selected={isKeyboardMode && index === selectedIndex}
+                          />
+                        ))}
+                      </div>
+                      <div className="px-3 py-1.5 text-center text-[11px] text-muted-foreground border-t border-border/20 bg-muted/20">
+                        {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
+                        {(() => {
+                          const totalActive = prompts.filter(p => !p.isArchived).length;
+                          return filteredPrompts.length !== totalActive && !showArchived ? ` of ${totalActive}` : '';
+                        })()}
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="mt-3" data-keyboard-mode={isKeyboardMode}>
+                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 max-h-[340px] overflow-y-auto pr-1">
+                        {filteredPrompts.map((prompt, index) => (
+                          <div
+                            key={prompt.id}
+                            data-prompt-index={index}
+                            data-selected={isKeyboardMode && index === selectedIndex}
+                            onMouseEnter={() => handleMouseEnterItem(index)}
+                          >
+                            <PromptCard
+                              prompt={prompt}
+                              isCopied={copiedPromptId === prompt.id}
+                              onView={handleViewById}
+                              onEdit={handleEditById}
+                              onArchive={handleArchiveById}
+                              onRestore={handleRestoreById}
+                              onCopyPrompt={handleCopyById}
+                            />
+                          </div>
+                        ))}
+                      </div>
+                      <div className="mt-3 text-center text-xs text-muted-foreground">
+                        {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
+                        {(() => {
+                          const totalActive = prompts.filter(p => !p.isArchived).length;
+                          return filteredPrompts.length !== totalActive && !showArchived ? ` of ${totalActive}` : '';
+                        })()}
+                      </div>
+                    </div>
+                  )}
+                </>
+              ) : null}
+            </div>
+
+            {/* Mobile Results */}
+            <div className="sm:hidden mt-6">
+              {loading ? (
+                <div className="text-center py-12">
+                  <div className="animate-spin inline-block w-10 h-10 border-4 border-primary/30 border-t-primary rounded-full" role="status">
+                    <span className="sr-only">Loading...</span>
+                  </div>
+                  <p className="mt-4 text-muted-foreground text-sm animate-pulse">Loading...</p>
+                </div>
+              ) : filteredPrompts.length === 0 && effectiveSearchQuery ? (
+                <div className="text-center py-8">
+                  <p className="text-muted-foreground text-sm">No matches.</p>
+                </div>
+              ) : filteredPrompts.length > 0 ? (
+                <>
+                  <div className="bg-card rounded-3xl overflow-hidden shadow-soft-lg" data-keyboard-mode={isKeyboardMode}>
+                    {filteredPrompts.map((prompt, index) => (
+                      <PromptListItem
+                        key={prompt.id}
+                        prompt={prompt}
+                        isCopied={copiedPromptId === prompt.id}
+                        onView={handleViewById}
+                        onEdit={handleEditById}
+                        onArchive={handleArchiveById}
+                        onRestore={handleRestoreById}
+                        onCopyPrompt={handleCopyById}
+                        onMouseEnter={() => handleMouseEnterItem(index)}
+                        variant="pane"
+                        data-prompt-index={index}
+                        data-selected={isKeyboardMode && index === selectedIndex}
+                      />
+                    ))}
+                  </div>
+                  <div className="mt-4 text-center text-xs text-muted-foreground">
+                    {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
+                  </div>
+                </>
+              ) : null}
             </div>
           </div>
-        )}
-            <div className="mt-4 text-center text-xs text-muted-foreground">
-              {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
-              {(() => {
-                const totalActive = prompts.filter(p => !p.isArchived).length;
-                return filteredPrompts.length !== totalActive && !showArchived ? ` of ${totalActive}` : '';
-              })()}
-            </div>
-          </>
-        )}
-        </section>
+        </div>
       </main>
 
       {/* Floating Search Bar - Mobile */}
@@ -1479,20 +1452,18 @@ function App() {
               showDuplicates={showDuplicates}
               setShowDuplicates={setShowDuplicates}
               collections={collections}
-              showNewPromptButton={showFloatingNewButton}
+              showNewPromptButton={true}
               onCreateNew={handleCreateNew}
             />
           </div>
         </div>
       </div>
 
-      {/* Floating Action Button - hidden on desktop when search bar is floating */}
+      {/* Floating Action Button - Mobile only */}
       <Button
         onClick={handleCreateNew}
         size="sm"
-        className={`fixed bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 z-50 h-9 px-3 flex items-center justify-center gap-1 ${
-          !isSearchBarVisible ? 'sm:hidden' : ''
-        }`}
+        className="sm:hidden fixed bottom-6 right-6 rounded-full shadow-lg hover:shadow-xl transition-all hover:scale-105 active:scale-95 z-50 h-9 px-3 flex items-center justify-center gap-1"
         title="Create prompt"
       >
         <Plus className="h-4 w-4" />

@@ -22,6 +22,7 @@ interface SearchBarProps {
   collections: UseCollectionsReturn;
   showNewPromptButton?: boolean;
   onCreateNew?: () => void;
+  connectedBottom?: boolean;
 }
 
 export interface SearchBarHandle {
@@ -29,7 +30,7 @@ export interface SearchBarHandle {
   blurSearchInput: () => void;
 }
 
-export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArchived, setShowArchived, viewMode, onViewModeToggle, showDuplicates, setShowDuplicates, collections, showNewPromptButton = false, onCreateNew }, ref) => {
+export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArchived, setShowArchived, viewMode, onViewModeToggle, showDuplicates, setShowDuplicates, collections, showNewPromptButton = false, onCreateNew, connectedBottom = false }, ref) => {
   const {
     prompts,
     searchQuery,
@@ -240,9 +241,9 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
   return (
     <>
-      <div className="bg-gradient-to-b from-white to-[#faf8fc] dark:from-[#161418] dark:to-[#131115] rounded-3xl relative px-5 py-4 sm:px-4 sm:py-3 space-y-3 shadow-soft ring-1 ring-primary/10">
+      <div className={`bg-gradient-to-b from-white to-[#faf8fc] dark:from-[#161418] dark:to-[#131115] relative px-4 py-3 sm:px-3 sm:py-2.5 space-y-2 ${connectedBottom ? '' : 'rounded-2xl shadow-soft ring-1 ring-primary/10'}`}>
         <div className="relative flex-1">
-          <Search className="pointer-events-none absolute left-3 sm:left-3 top-1/2 h-5 w-5 sm:h-4 sm:w-4 -translate-y-1/2 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 sm:left-2.5 top-1/2 h-4 w-4 sm:h-3.5 sm:w-3.5 -translate-y-1/2 text-muted-foreground" />
 
           {/* Inline suggestion overlay */}
           {inlineSuggestion && (
@@ -264,36 +265,36 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
             value={inputValue}
             onChange={handleInputChange}
             onKeyDown={handleInlineAutocompleteKeyDown}
-            className="h-11 sm:h-9 w-full border-0 bg-transparent pl-11 sm:pl-10 pr-24 sm:pr-20 text-base sm:text-sm focus-visible:ring-0 py-0"
+            className="h-9 sm:h-8 w-full border-0 bg-transparent pl-10 sm:pl-9 pr-20 sm:pr-16 text-sm sm:text-sm focus-visible:ring-0 py-0"
           />
-          <div className="absolute right-3 top-1/2 -translate-y-1/2 flex items-center gap-1">
+          <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
             {inputValue && (
               <button
                 onClick={handleClearInput}
-                className="rounded-full p-1.5 sm:p-1 text-muted-foreground transition-all hover:text-foreground active:scale-95"
+                className="rounded-full p-1 text-muted-foreground transition-all hover:text-foreground active:scale-95"
                 title="Clear search"
               >
-                <X className="h-5 w-5 sm:h-4 sm:w-4" />
+                <X className="h-3.5 w-3.5" />
               </button>
             )}
             <Button
               variant={booleanExpression || showBooleanBuilder ? 'default' : 'ghost'}
               size="sm"
               onClick={() => setShowBooleanBuilder((open) => !open)}
-              className="h-8 w-8 sm:h-7 sm:w-7 p-0"
+              className="h-6 w-6 p-0"
               title="Filter builder"
             >
-              <Filter className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+              <Filter className="h-3 w-3" />
             </Button>
             {showNewPromptButton && onCreateNew && (
               <Button
                 variant="default"
                 size="sm"
                 onClick={onCreateNew}
-                className="h-8 w-8 sm:h-7 sm:w-7 p-0 transition-all duration-300 animate-in fade-in slide-in-from-right-2"
+                className="h-6 w-6 p-0 transition-all duration-300 animate-in fade-in slide-in-from-right-2"
                 title="New Prompt"
               >
-                <Plus className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
+                <Plus className="h-3 w-3" />
               </Button>
             )}
           </div>

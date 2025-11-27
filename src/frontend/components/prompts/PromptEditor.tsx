@@ -1,12 +1,11 @@
 import { useState, useEffect, useRef } from 'react';
-import { Lock, Globe, X } from 'lucide-react';
+import { Globe, X } from 'lucide-react';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from '@/frontend/components/ui/dialog';
 import { Button } from '@/frontend/components/ui/button';
 import { Input } from '@/frontend/components/ui/input';
 import { Textarea } from '@/frontend/components/ui/textarea';
 import { Badge } from '@/frontend/components/ui/badge';
 import { Label } from '@/frontend/components/ui/label';
-import { shouldEncrypt } from '@/core/encryption/crypto';
 import { usePrompts } from '@/frontend/hooks/usePrompts';
 import type { Prompt } from '@/shared/types/prompt';
 
@@ -142,29 +141,6 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
     }
   };
 
-  const handleTogglePublic = () => {
-    const hasPublicTag = tags.some(tag => tag.toLowerCase() === 'public');
-    if (hasPublicTag) {
-      // Remove "public" tag - no confirmation needed
-      setTags(tags.filter(tag => tag.toLowerCase() !== 'public'));
-    } else {
-      // Add "public" tag - show warning confirmation
-      const confirmed = window.confirm(
-        '⚠️ WARNING: Making this prompt public will store it as plain text PERMANENTLY.\n\n' +
-        '• Anyone can read it forever\n' +
-        '• It cannot be deleted\n' +
-        '• Making it private later will NOT remove the public version\n\n' +
-        'Are you sure you want to make this prompt public?'
-      );
-      if (confirmed) {
-        setTags([...tags, 'public']);
-      }
-    }
-  };
-
-  // Determine encryption status based on current tags
-  const willBeEncrypted = shouldEncrypt(tags);
-
   const handleSave = async () => {
     if (!title.trim()) {
       alert('Title is required');
@@ -214,6 +190,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="Give your prompt a clear title..."
                   autoFocus
+                  className="border-2 border-border shadow-md"
                 />
               </div>
               <div className="space-y-2">
@@ -222,6 +199,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   placeholder="Optional short description"
+                  className="border-2 border-border shadow-md"
                 />
               </div>
 
@@ -234,6 +212,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                   onChange={(e) => setTagInput(e.target.value)}
                   onKeyDown={handleKeyDown}
                   placeholder="Add a tag and press Enter"
+                  className="border-2 border-border shadow-md"
                 />
                 <Button type="button" variant="outline" onClick={() => handleAddTag()}>
                   Add
@@ -278,80 +257,18 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 placeholder="Write your prompt..."
-                className="min-h-[260px] resize-vertical font-mono text-sm"
+                className="min-h-[260px] resize-vertical font-mono text-sm border-2 border-border shadow-md"
               />
               <div className="flex flex-wrap items-center gap-3 text-xs text-foreground/60">
                 <span>{content.length} characters</span>
                 <span>•</span>
                 <span>{Math.ceil(new Blob([content]).size / 1024)} KB</span>
-                {new Blob([content]).size > 102400 && (
-                  <span className="text-amber-600">⚠ Exceeds 100 KiB free tier</span>
-                )}
-              </div>
-              <div
-                className={`rounded-md border px-3 py-2 text-xs leading-relaxed ${
-                  willBeEncrypted
-                    ? 'border-primary/30 bg-primary/10 text-foreground'
-                    : 'border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-300'
-                }`}
-              >
-                {willBeEncrypted ? (
-                  <>
-                    Only your wallet can decrypt this content. Add the <code className="px-1 py-0.5 bg-black/5 dark:bg-white/10 rounded">public</code> tag to share it.
-                  </>
-                ) : (
-                  <>
-                    <strong>Warning:</strong> This prompt will be permanently public. Removing the public tag later will not erase this copy.
-                  </>
-                )}
               </div>
             </div>
           </div>
         </DialogBody>
 
-        <DialogFooter className="flex-row justify-between border-t">
-          <div className="flex items-center gap-3">
-            <Badge
-              variant={willBeEncrypted ? 'default' : 'secondary'}
-              className="flex items-center gap-1.5 px-3 py-1 text-xs"
-              title={willBeEncrypted
-                ? 'This prompt will be encrypted. Only your wallet can decrypt it.'
-                : 'This prompt will be public. Anyone can read it.'}
-            >
-              {willBeEncrypted ? (
-                <>
-                  <Lock className="h-3.5 w-3.5" />
-                  Encrypted
-                </>
-              ) : (
-                <>
-                  <Globe className="h-3.5 w-3.5" />
-                  Public
-                </>
-              )}
-            </Badge>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              onClick={handleTogglePublic}
-              title={willBeEncrypted ? 'Make this prompt public' : 'Make this prompt private (encrypted)'}
-              className="gap-2"
-            >
-              {willBeEncrypted ? (
-                <>
-                  <Globe className="h-4 w-4" />
-                  <span className="hidden sm:inline">Make Public</span>
-                </>
-              ) : (
-                <>
-                  <Lock className="h-4 w-4" />
-                  <span className="hidden sm:inline">Make Private</span>
-                </>
-              )}
-            </Button>
-          </div>
-
+        <DialogFooter className="flex-row justify-end border-t">
           <div className="flex gap-2">
             <Button
               variant="outline"
@@ -366,7 +283,7 @@ export function PromptEditor({ open, onOpenChange, prompt, onSave }: PromptEdito
               disabled={saving || !title.trim() || !content.trim()}
               size="sm"
             >
-              {saving ? 'Saving…' : prompt ? 'Update & Upload' : 'Create & Upload'}
+              {saving ? 'Saving…' : prompt ? 'Update' : 'Create'}
             </Button>
           </div>
         </DialogFooter>

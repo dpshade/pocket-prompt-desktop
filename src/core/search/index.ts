@@ -91,6 +91,23 @@ export interface SearchResult {
 }
 
 /**
+ * Simple O(n) title search for short queries (1-3 chars)
+ * Case-insensitive substring match on title only
+ */
+export function simpleTitleSearch(prompts: Prompt[], query: string): SearchResult[] {
+  const lowerQuery = query.toLowerCase().trim();
+  if (!lowerQuery) return [];
+
+  return prompts
+    .filter(p => !p.isArchived && p.title.toLowerCase().includes(lowerQuery))
+    .map(p => ({
+      id: p.id,
+      score: p.title.toLowerCase().startsWith(lowerQuery) ? 2 : 1 // Prioritize prefix matches
+    }))
+    .sort((a, b) => b.score - a.score);
+}
+
+/**
  * Search prompts by query
  * Returns array of search results with IDs and scores, sorted by relevance
  * Uses FlexSearch across title, description, content, tags

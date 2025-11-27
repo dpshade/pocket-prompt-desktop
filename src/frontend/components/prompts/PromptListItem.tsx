@@ -51,7 +51,7 @@ export const PromptListItem = memo(function PromptListItem({ prompt, isCopied = 
 
   const containerClass = variant === 'pane'
     ? cn(
-        'group relative py-5 px-5 sm:py-4 sm:px-4 cursor-pointer',
+        'group relative py-2.5 px-4 sm:py-2 sm:px-3 cursor-pointer',
         // CSS hover class (controlled by parent's data-keyboard-mode)
         !isCopied && 'list-item-hoverable',
         // Keyboard selection - uses identical CSS to hover
@@ -59,7 +59,7 @@ export const PromptListItem = memo(function PromptListItem({ prompt, isCopied = 
         className,
       )
     : cn(
-        'group relative bg-card rounded-3xl py-5 px-5 sm:py-4 sm:px-5 cursor-pointer overflow-hidden shadow-soft',
+        'group relative bg-card rounded-2xl py-3 px-4 sm:py-2.5 sm:px-3 cursor-pointer overflow-hidden shadow-soft',
         // CSS hover class (controlled by parent's data-keyboard-mode)
         !isCopied && 'card-hoverable',
         // Keyboard selection - uses identical CSS to hover
