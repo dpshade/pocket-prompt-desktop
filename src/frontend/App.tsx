@@ -1222,7 +1222,7 @@ function App() {
                 collections={collections}
                 showNewPromptButton={true}
                 onCreateNew={handleCreateNew}
-                connectedBottom={!loading && filteredPrompts.length > 0}
+                connectedBottom={!loading && (filteredPrompts.length > 0 || showArchived || showDuplicates)}
               />
 
               {/* Status Indicators */}
@@ -1240,11 +1240,7 @@ function App() {
               )}
 
               {/* Results Section - Scrollable */}
-              {!loading && filteredPrompts.length === 0 && effectiveSearchQuery ? (
-                <div className="text-center py-4 bg-card border-t border-border/30">
-                  <p className="text-muted-foreground text-sm">No matches found.</p>
-                </div>
-              ) : filteredPrompts.length > 0 ? (
+              {filteredPrompts.length > 0 && (
                 <div className="bg-card border-t border-border/30" data-keyboard-mode={isKeyboardMode}>
                   <div className="max-h-[300px] overflow-y-auto">
                     {filteredPrompts.map((prompt, index) => (
@@ -1272,16 +1268,12 @@ function App() {
                     })()}
                   </div>
                 </div>
-              ) : null}
+              )}
             </div>
 
             {/* Mobile Results */}
             <div className="sm:hidden mt-6">
-              {!loading && filteredPrompts.length === 0 && effectiveSearchQuery ? (
-                <div className="text-center py-8">
-                  <p className="text-muted-foreground text-sm">No matches.</p>
-                </div>
-              ) : filteredPrompts.length > 0 ? (
+              {filteredPrompts.length > 0 && (
                 <>
                   <div className="bg-card rounded-3xl overflow-hidden shadow-soft-lg" data-keyboard-mode={isKeyboardMode}>
                     {filteredPrompts.map((prompt, index) => (
@@ -1305,7 +1297,7 @@ function App() {
                     {filteredPrompts.length} {filteredPrompts.length === 1 ? 'prompt' : 'prompts'}
                   </div>
                 </>
-              ) : null}
+              )}
             </div>
           </div>
         </div>

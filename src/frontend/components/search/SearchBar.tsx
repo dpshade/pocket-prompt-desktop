@@ -239,7 +239,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
   return (
     <>
-      <div className={`bg-gradient-to-b from-white to-[#faf8fc] dark:bg-card dark:from-transparent dark:to-transparent relative px-4 py-3 sm:px-3 sm:py-2.5 space-y-2 ${connectedBottom ? '' : 'rounded-2xl shadow-soft ring-1 ring-primary/10'}`}>
+      <div className={`bg-gradient-to-b from-white to-[#faf8fc] dark:bg-card dark:from-transparent dark:to-transparent relative px-4 pt-3 sm:px-3 sm:pt-2.5 space-y-2 ${connectedBottom ? 'pb-0' : 'pb-3 sm:pb-2.5 rounded-2xl shadow-soft ring-1 ring-primary/10'}`}>
         <div className="relative flex-1">
           <Search className="pointer-events-none absolute left-3 sm:left-2.5 top-1/2 h-4 w-4 sm:h-3.5 sm:w-3.5 -translate-y-1/2 text-muted-foreground" />
 
@@ -377,14 +377,26 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
 
         {booleanExpression && !showBooleanBuilder && (
           <div
-            className="flex items-center gap-2 text-sm cursor-pointer transition-colors pt-3 pb-4 -mx-5 -mb-4 sm:-mx-4 sm:-mb-3 px-9 sm:px-8 bg-muted/50 rounded-b-3xl"
+            className="flex items-center gap-2 text-sm cursor-pointer transition-colors pt-3 pb-3 -mx-4 px-8 sm:px-7 bg-muted/50 hover:bg-muted/70"
             onClick={() => {
-              setExpressionText(expressionToString(booleanExpression));
-              setShowBooleanBuilder(true);
+              clearBooleanSearch();
+              setShowBooleanBuilder(false);
+              setShowTagSuggestions(false);
+              searchInputRef.current?.focus();
             }}
-            title="Click to edit filter"
+            title="Click to remove filter"
           >
-            <Filter className="h-4 w-4 text-primary" />
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setExpressionText(expressionToString(booleanExpression));
+                setShowBooleanBuilder(true);
+              }}
+              className="rounded-full p-1 text-primary/70 transition-colors hover:text-primary hover:bg-primary/10"
+              title="Edit filter"
+            >
+              <Filter className="h-4 w-4" />
+            </button>
             <div className="flex-1 min-w-0">
               {activeSavedSearch ? (
                 <span className="font-medium text-primary">{activeSavedSearch.name}</span>
@@ -392,19 +404,7 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(({ showArch
                 <code className="truncate text-xs text-primary">{expressionToString(booleanExpression)}</code>
               )}
             </div>
-            <button
-              onClick={(e) => {
-                e.stopPropagation();
-                clearBooleanSearch();
-                setShowBooleanBuilder(false);
-                setShowTagSuggestions(false);
-                searchInputRef.current?.focus();
-              }}
-              className="rounded-full p-1 text-primary/70 transition-colors hover:text-primary"
-              title="Remove filter"
-            >
-              <X className="h-4 w-4" />
-            </button>
+            <X className="h-4 w-4 text-primary/70" />
           </div>
         )}
 
