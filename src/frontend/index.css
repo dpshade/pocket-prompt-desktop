@@ -206,10 +206,20 @@
     content: '';
     position: absolute;
     left: 0;
-    top: 0;
-    bottom: 0;
+    top: 8px;
+    bottom: 8px;
     width: 4px;
+    border-radius: 0 2px 2px 0;
     background-color: transparent;
+  }
+
+  /* Adjust indicator for first/last items to account for parent's rounded corners */
+  .list-item-hoverable:first-child::before {
+    top: 16px;
+  }
+
+  .list-item-hoverable:last-child::before {
+    bottom: 16px;
   }
 
   /* List item hover state - only when not in keyboard mode */
