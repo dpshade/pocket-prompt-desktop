@@ -1195,16 +1195,16 @@ function App() {
       </header>
 
       {/* Main Content - Search Engine Style */}
-      <main className="min-h-screen px-4 sm:px-6 lg:px-10 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:pb-6 pt-[22vh] sm:pt-[27vh]">
-        <div className="mx-auto w-full max-w-2xl">
+      <main className={`min-h-screen px-4 sm:px-6 lg:px-10 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:pb-6 flex justify-center transition-[padding] duration-300 ease-out ${filteredPrompts.length > 0 ? 'pt-[25vh] sm:pt-[30vh]' : 'pt-[30vh] sm:pt-[35vh]'}`}>
+        <div className="w-full max-w-2xl">
           {/* Search Container - Logo + Search + Results */}
-          <div className="flex flex-col">
+          <div className="flex flex-col w-full">
             {/* Logo Section */}
             <div className="flex items-center justify-center gap-3 mb-8">
               <img
                 src="/icon-48.png"
                 alt="Pocket Prompt Logo"
-                className="h-7 w-7 sm:h-9 sm:w-9"
+                className="h-6 w-6 sm:h-8 sm:w-8"
               />
               <h1 className="font-bold text-foreground text-3xl sm:text-4xl tracking-tight">
                 Pocket Prompt
@@ -1227,7 +1227,7 @@ function App() {
 
               {/* Status Indicators */}
               {showArchived && (
-                <div className="flex items-center gap-2 bg-card/80 px-4 py-1.5 text-xs border-t border-border/30">
+                <div className="flex items-center gap-2 bg-card/80 px-4 py-2.5 text-xs border-t border-border/30">
                   <ArchiveIcon className="h-3 w-3 text-muted-foreground" />
                   <span className="font-medium">Viewing archived</span>
                 </div>
