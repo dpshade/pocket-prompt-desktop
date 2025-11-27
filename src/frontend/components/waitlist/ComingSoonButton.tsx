@@ -61,7 +61,6 @@ export function ComingSoonButton({ className }: ComingSoonButtonProps) {
         className={`gap-2 h-10 px-3 ${className || ''}`}
       >
         <Rocket className="h-4 w-4" />
-        <span className="hidden sm:inline">What's Next</span>
         <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">
           soon
         </span>
