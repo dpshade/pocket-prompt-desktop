@@ -1304,7 +1304,7 @@ function App() {
 
               {/* Results Section - Scrollable */}
               {filteredPrompts.length > 0 && (
-                <div className="bg-card border-t border-border/30" data-keyboard-mode={isKeyboardMode}>
+                <div className="bg-[#faf8fc] dark:bg-card border-t border-border/30" data-keyboard-mode={isKeyboardMode}>
                   <div className="max-h-[300px] overflow-y-auto">
                     {filteredPrompts.map((prompt, index) => (
                       <PromptListItem
