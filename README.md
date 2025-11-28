@@ -224,6 +224,15 @@ bun run tauri build  # Build production app
 
 ## Changelog
 
+### v0.1.7 (2025-11-28)
+- **Fixed Icon Border**: Resolved gray halo artifact on macOS app icon
+- **Custom Icon Generator**: Added `generate-icon.sh` script using ImageMagick
+- **Documentation**: Updated icon generation workflow to avoid Tauri CLI bug
+
+### v0.1.6 (2025-11-28)
+- **macOS Window Styling**: Native macOS appearance with proper rounded corners
+- **Platform Polish**: Enhanced window decorations and transparency
+
 ### v0.1.5 (2025-11-28)
 - **New App Icons**: Professional gradient logo across all platforms
 - **Icon Generation**: Automated icon generation workflow using Tauri CLI
