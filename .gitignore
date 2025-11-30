@@ -58,3 +58,6 @@ Thumbs.db
 *.tmp
 *.temp
 .vercel
+
+# Session debug logs
+session-ses_*.md
