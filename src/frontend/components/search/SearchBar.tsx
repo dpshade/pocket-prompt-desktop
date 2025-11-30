@@ -1,4 +1,4 @@
-import { Search, X, Filter, Bookmark, Archive, Plus } from "lucide-react";
+import { Search, X, Filter, Plus, Clock } from "lucide-react";
 import { Input } from "@/frontend/components/ui/input";
 import { Badge } from "@/frontend/components/ui/badge";
 import { Button } from "@/frontend/components/ui/button";
@@ -25,10 +25,12 @@ import { BooleanBuilder } from "@/frontend/components/search/BooleanBuilder";
 import { getDuplicateCount } from "@/core/validation/duplicates";
 
 interface SearchBarProps {
-  showArchived: boolean;
-  setShowArchived: (show: boolean) => void;
   showDuplicates: boolean;
   setShowDuplicates: (show: boolean) => void;
+  showRecent: boolean;
+  setShowRecent: (show: boolean) => void;
+  collectionsDialogOpen: boolean;
+  setCollectionsDialogOpen: (open: boolean) => void;
   collections: UseCollectionsReturn;
   showNewPromptButton?: boolean;
   onCreateNew?: () => void;
@@ -43,10 +45,12 @@ export interface SearchBarHandle {
 export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
   (
     {
-      showArchived,
-      setShowArchived,
       showDuplicates,
       setShowDuplicates,
+      showRecent,
+      setShowRecent,
+      collectionsDialogOpen,
+      setCollectionsDialogOpen,
       collections,
       showNewPromptButton = false,
       onCreateNew,
@@ -71,8 +75,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
     const [showTagSuggestions, setShowTagSuggestions] = useState(false);
     const [showBooleanBuilder, setShowBooleanBuilder] = useState(false);
     const [expressionText, setExpressionText] = useState("");
-    const [savedSearchesDialogOpen, setSavedSearchesDialogOpen] =
-      useState(false);
     const searchInputRef = useRef<HTMLInputElement>(null);
     const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -140,9 +142,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
       setSearchQuery(""); // Synchronous - clearing is cheap, no search computation
     }, [setSearchQuery]);
 
-    // Inline autocomplete state
-    const [inlineSuggestion, setInlineSuggestion] = useState("");
-
     // Expose methods to parent component
     useImperativeHandle(ref, () => ({
       focusSearchInput: () => {
@@ -157,85 +156,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
     useEffect(() => {
       searchInputRef.current?.focus();
     }, []);
-
-    // Update inline suggestion when input value or cursor position changes
-    useEffect(() => {
-      if (!searchInputRef.current) {
-        setInlineSuggestion("");
-        return;
-      }
-
-      const input = searchInputRef.current;
-      const cursorPos = input.selectionStart || 0;
-
-      // Only show suggestion if cursor is at the end of the text
-      if (cursorPos !== inputValue.length) {
-        setInlineSuggestion("");
-        return;
-      }
-
-      const textBeforeCursor = inputValue.slice(0, cursorPos);
-      const lastHashIndex = textBeforeCursor.lastIndexOf("#");
-
-      if (lastHashIndex !== -1) {
-        const tagQuery = textBeforeCursor.slice(lastHashIndex + 1);
-
-        // Check if we're still in a tag (no space after #)
-        if (!tagQuery.includes(" ") && tagQuery.length > 0) {
-          // Find first tag that starts with the query
-          const matchingTag = allTags.find((tag) =>
-            tag.toLowerCase().startsWith(tagQuery.toLowerCase()),
-          );
-
-          if (
-            matchingTag &&
-            matchingTag.toLowerCase() !== tagQuery.toLowerCase()
-          ) {
-            // Show the remaining part of the tag
-            const suggestion = matchingTag.slice(tagQuery.length);
-            setInlineSuggestion(suggestion);
-            return;
-          }
-        }
-      }
-
-      setInlineSuggestion("");
-    }, [inputValue, allTags]);
-
-    // Handle inline autocomplete acceptance
-    const acceptInlineSuggestion = () => {
-      if (!inlineSuggestion || !searchInputRef.current) return;
-
-      const newQuery = inputValue + inlineSuggestion + " ";
-      setInputValue(newQuery);
-      isInternalChange.current = true;
-      setSearchQuery(newQuery);
-      setInlineSuggestion("");
-
-      // Set cursor position after the space
-      setTimeout(() => {
-        const input = searchInputRef.current;
-        if (input) {
-          input.setSelectionRange(newQuery.length, newQuery.length);
-          input.focus();
-        }
-      }, 0);
-    };
-
-    // Handle keyboard navigation for inline suggestion
-    const handleInlineAutocompleteKeyDown = (
-      e: React.KeyboardEvent<HTMLInputElement>,
-    ) => {
-      if (!inlineSuggestion) return;
-
-      if (e.key === "Tab" || e.key === "ArrowRight") {
-        e.preventDefault();
-        acceptInlineSuggestion();
-      } else if (e.key === "Escape") {
-        e.preventDefault();
-        setInlineSuggestion("");
-      }
-    };
 
     // Keyboard shortcuts: / and cmd+k/ctrl+k
     useEffect(() => {
@@ -282,20 +202,6 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           <div className="relative flex-1">
             <Search className="pointer-events-none absolute left-3 sm:left-2.5 top-1/2 h-4 w-4 sm:h-3.5 sm:w-3.5 -translate-y-1/2 text-muted-foreground" />
 
-            {/* Inline suggestion overlay */}
-            {inlineSuggestion && (
-              <div
-                className="pointer-events-none absolute left-11 sm:left-10 top-1/2 -translate-y-1/2 text-base sm:text-sm text-muted-foreground/50"
-                style={{
-                  whiteSpace: "pre",
-                  fontFamily: "inherit",
-                }}
-              >
-                <span className="invisible">{inputValue}</span>
-                {inlineSuggestion}
-              </div>
-            )}
-
             <Input
               ref={searchInputRef}
               type="text"
@@ -306,7 +212,10 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
               }
               value={inputValue}
               onChange={handleInputChange}
-              onKeyDown={handleInlineAutocompleteKeyDown}
+              autoComplete="off"
+              autoCorrect="off"
+              autoCapitalize="off"
+              spellCheck={false}
               className="h-9 sm:h-8 w-full border-0 bg-transparent pl-10 sm:pl-9 pr-20 sm:pr-16 text-sm sm:text-sm focus-visible:ring-0 py-0"
             />
             <div className="absolute right-2 top-1/2 -translate-y-1/2 flex items-center gap-0.5">
@@ -330,6 +239,15 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
               >
                 <Filter className="h-3 w-3" />
               </Button>
+              <Button
+                variant={showRecent ? "default" : "ghost"}
+                size="sm"
+                onClick={() => setShowRecent(!showRecent)}
+                className={`h-6 w-6 p-0 ${showRecent ? "" : "text-muted-foreground"}`}
+                title={showRecent ? "Hide recent" : "Show recent 15"}
+              >
+                <Clock className="h-3 w-3" />
+              </Button>
               {showNewPromptButton && onCreateNew && (
                 <Button
                   variant="default"
@@ -347,38 +265,15 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
           {!booleanExpression && !showBooleanBuilder && (
             <>
               <div
-                className="flex flex-wrap items-center justify-between gap-2 text-sm text-muted-foreground cursor-pointer"
+                className="text-sm text-muted-foreground cursor-pointer"
                 onClick={() => {
                   const newValue = !showTagSuggestions;
                   setShowTagSuggestions(newValue);
                 }}
               >
                 <div className="font-medium text-foreground transition-colors hover:text-primary text-[13px] sm:text-xs pl-2">
-                  {showTagSuggestions ? "Hide tag filters" : "Show tag filters"}{" "}
-                  ({allTags.length} {allTags.length === 1 ? "tag" : "tags"})
-                </div>
-                <div
-                  className="flex items-center gap-2.5 sm:gap-2"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <Button
-                    size="sm"
-                    variant="ghost"
-                    onClick={() => setSavedSearchesDialogOpen(true)}
-                    className="h-8 w-8 sm:h-7 sm:w-7 p-0 text-muted-foreground"
-                    title="Collections"
-                  >
-                    <Bookmark className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                  </Button>
-                  <Button
-                    variant={showArchived ? "default" : "ghost"}
-                    size="sm"
-                    onClick={() => setShowArchived(!showArchived)}
-                    className={`h-8 w-8 sm:h-7 sm:w-7 p-0 ${showArchived ? "" : "text-muted-foreground"}`}
-                    title={showArchived ? "Hide archived" : "Show archived"}
-                  >
-                    <Archive className="h-4 w-4 sm:h-3.5 sm:w-3.5" />
-                  </Button>
+                  {"Tag Folders "}
+                  ({allTags.length})
                 </div>
               </div>
 
@@ -414,6 +309,8 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
                               // No tags selected, clear the filter
                               clearBooleanSearch();
                             }
+                            // Re-focus search input after tag selection
+                            searchInputRef.current?.focus();
                           }}
                         >
                           {tag}
@@ -488,13 +385,13 @@ export const SearchBar = forwardRef<SearchBarHandle, SearchBarProps>(
         </div>
 
         <SavedSearchesDialog
-          open={savedSearchesDialogOpen}
-          onOpenChange={setSavedSearchesDialogOpen}
+          open={collectionsDialogOpen}
+          onOpenChange={setCollectionsDialogOpen}
           onLoad={handleLoadSavedSearch}
           onEdit={(search) => {
             setExpressionText(expressionToString(search.expression));
             setShowBooleanBuilder(true);
-            setSavedSearchesDialogOpen(false);
+            setCollectionsDialogOpen(false);
           }}
           showDuplicates={showDuplicates}
           setShowDuplicates={setShowDuplicates}

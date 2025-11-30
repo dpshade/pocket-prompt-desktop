@@ -20,8 +20,17 @@ import { Input } from "@/frontend/components/ui/input";
 import { type SyncMode, SYNC_MODES } from "@/shared/types/sync";
 import { useSyncModeStatus, useSyncMode } from "@/frontend/hooks/useSyncMode";
 
-export function SyncButton() {
-  const [showModal, setShowModal] = useState(false);
+interface SyncButtonProps {
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
+}
+
+export function SyncButton({ open: controlledOpen, onOpenChange }: SyncButtonProps = {}) {
+  const [internalOpen, setInternalOpen] = useState(false);
+  
+  // Support both controlled and uncontrolled modes
+  const showModal = controlledOpen ?? internalOpen;
+  const setShowModal = onOpenChange ?? setInternalOpen;
   const [email, setEmail] = useState("");
   const [submitted, setSubmitted] = useState(false);
   const [loading, setLoading] = useState(false);

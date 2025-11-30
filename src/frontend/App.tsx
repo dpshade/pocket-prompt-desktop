@@ -12,6 +12,12 @@ import {
   Download,
   Copy,
   FolderSync,
+  Menu,
+  Bookmark,
+  Sparkles,
+  Moon,
+  Sun,
+  RefreshCw,
 } from "lucide-react";
 import { WalletButton } from "@/frontend/components/wallet/WalletButton";
 import {
@@ -26,7 +32,6 @@ import { UploadDialog } from "@/frontend/components/shared/UploadDialog";
 import { MobileMenu } from "@/frontend/components/shared/MobileMenu";
 import { PasswordPrompt } from "@/frontend/components/wallet/PasswordPrompt";
 import { PasswordUnlock } from "@/frontend/components/wallet/PasswordUnlock";
-import { ThemeToggle } from "@/frontend/components/shared/ThemeToggle";
 import { HotkeysDialog } from "@/frontend/components/shared/HotkeysDialog";
 import { ComingSoonButton } from "@/frontend/components/waitlist/ComingSoonButton";
 import { PublicPromptView } from "@/frontend/components/prompts/PublicPromptView";
@@ -40,12 +45,19 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/frontend/components/ui/tooltip";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/frontend/components/ui/dropdown-menu";
 import { useWallet } from "@/frontend/hooks/useWallet";
 import { useIdentity } from "@/frontend/hooks/useIdentity";
 import { usePrompts } from "@/frontend/hooks/usePrompts";
 import { usePassword } from "@/frontend/contexts/PasswordContext";
 import { FEATURE_FLAGS } from "@/shared/config/features";
-import { useInitializeTheme } from "@/frontend/hooks/useTheme";
+import { useInitializeTheme, useTheme } from "@/frontend/hooks/useTheme";
 import { useCollections } from "@/frontend/hooks/useCollections";
 import {
   useSyncModeStatus,
@@ -76,6 +88,7 @@ import {
 
 function App() {
   useInitializeTheme();
+  const { theme, toggleTheme } = useTheme();
 
   // Initialize device identity for Turso mode
   const identity = useIdentity();
@@ -158,6 +171,9 @@ function App() {
 
   const [showArchived, setShowArchived] = useState(false);
   const [showDuplicates, setShowDuplicates] = useState(false);
+  const [showRecent, setShowRecent] = useState(false);
+  const [collectionsDialogOpen, setCollectionsDialogOpen] = useState(false);
+  const [syncModalOpen, setSyncModalOpen] = useState(false);
   const [selectedPrompt, setSelectedPrompt] = useState<Prompt | null>(null);
   const [viewDialogOpen, setViewDialogOpen] = useState(false);
   const [editorOpen, setEditorOpen] = useState(false);
@@ -820,7 +836,8 @@ function App() {
     deepLinkInitialized,
   ]);
 
-  // Blur search input when any dialog opens
+  // Blur search input when any dialog opens, focus when all close
+  const prevDialogOpenRef = useRef(false);
   useEffect(() => {
     const anyDialogOpen =
       viewDialogOpen ||
@@ -839,7 +856,12 @@ function App() {
       ) {
         activeElement.blur();
       }
+    } else if (prevDialogOpenRef.current && !anyDialogOpen) {
+      // Dialogs just closed - focus search bar
+      searchBarRef.current?.focusSearchInput();
     }
+
+    prevDialogOpenRef.current = anyDialogOpen;
   }, [
     viewDialogOpen,
     editorOpen,
@@ -1020,9 +1042,18 @@ function App() {
       booleanExpression ||
       selectedTags.length > 0 ||
       showDuplicates ||
-      showArchived;
+      showArchived ||
+      showRecent;
     if (!effectiveSearchQuery && !hasActiveFilter) {
       return [];
+    }
+
+    // Show recent mode: return 15 most recent non-archived prompts
+    if (showRecent && !effectiveSearchQuery && !booleanExpression && selectedTags.length === 0 && !showDuplicates && !showArchived) {
+      return prompts
+        .filter((p) => !p.isArchived)
+        .sort((a, b) => (timestampMap.get(b.id) || 0) - (timestampMap.get(a.id) || 0))
+        .slice(0, 15);
     }
 
     // Get search results based on query length:
@@ -1088,7 +1119,15 @@ function App() {
     selectedTags,
     timestampMap,
     showDuplicates,
+    showRecent,
   ]);
+
+  // Clear "show recent" when any filter is applied
+  useEffect(() => {
+    if (effectiveSearchQuery || booleanExpression || selectedTags.length > 0 || showDuplicates || showArchived) {
+      setShowRecent(false);
+    }
+  }, [effectiveSearchQuery, booleanExpression, selectedTags, showDuplicates, showArchived]);
 
   // Reset selected index when filtered prompts change
   // Use effectiveSearchQuery to stay in sync with filtering
@@ -1252,22 +1291,6 @@ function App() {
           if (blockingDialogOpen || isTyping) return;
           event.preventDefault();
           handleCopy(filteredPrompts[selectedIndex]);
-          break;
-        case "a":
-          // Don't allow when dialogs are open or typing - PromptDialog handles its own shortcuts
-          if (blockingDialogOpen || isTyping) return;
-          event.preventDefault();
-          if (filteredPrompts[selectedIndex].isArchived) {
-            restorePrompt(
-              filteredPrompts[selectedIndex].id,
-              password || undefined,
-            );
-          } else {
-            archivePrompt(
-              filteredPrompts[selectedIndex].id,
-              password || undefined,
-            );
-          }
           break;
         case "?":
           // Show hotkeys dialog (works even when other dialogs are open)
@@ -1567,7 +1590,7 @@ function App() {
 
       {/* Minimal Header - Action buttons only */}
       <header className="fixed top-2 right-2 z-[60] pointer-events-none">
-        <div className="flex items-center gap-2 pointer-events-auto mt-1">
+        <div className="flex items-center gap-1.5 pointer-events-auto mt-1">
           {/* Sync Mode Indicator */}
           {syncStatus.mode === "attached-directory" && (
             <TooltipProvider>
@@ -1596,36 +1619,67 @@ function App() {
             </TooltipProvider>
           )}
 
-          {/* Desktop action buttons */}
+          {/* Desktop action buttons - Collections visible, rest in menu */}
           <div className="hidden sm:flex items-center gap-1">
             <TooltipProvider>
               <Tooltip>
                 <TooltipTrigger asChild>
                   <Button
                     variant="ghost"
-                    className="h-8 w-8 p-0"
-                    onClick={() => setUploadDialogOpen(true)}
+                    size="sm"
+                    onClick={() => setCollectionsDialogOpen(true)}
+                    className="h-8 w-8 p-0 text-muted-foreground"
+                    title="Collections"
                   >
-                    <Download className="h-4 w-4" />
+                    <Bookmark className="h-4 w-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>Import/Export</TooltipContent>
+                <TooltipContent>Collections</TooltipContent>
               </Tooltip>
             </TooltipProvider>
 
-            <SyncButton />
-            <ComingSoonButton
-              open={comingSoonOpen}
-              onOpenChange={setComingSoonOpen}
-            />
-            <ThemeToggle />
+            {/* Hamburger menu for other actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground">
+                  <Menu className="h-4 w-4" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => setShowArchived(!showArchived)}>
+                  <ArchiveIcon className="h-4 w-4 mr-2" />
+                  {showArchived ? "Hide Archived" : "Show Archived"}
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setUploadDialogOpen(true)}>
+                  <Download className="h-4 w-4 mr-2" />
+                  Import / Export
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => setSyncModalOpen(true)}>
+                  <RefreshCw className="h-4 w-4 mr-2" />
+                  Sync Settings
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => setComingSoonOpen(true)}>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  What's Next
+                </DropdownMenuItem>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={toggleTheme}>
+                  {theme === "dark" ? (
+                    <Sun className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Moon className="h-4 w-4 mr-2" />
+                  )}
+                  {theme === "dark" ? "Light Mode" : "Dark Mode"}
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
 
           {FEATURE_FLAGS.WALLET_CONNECTION && (
             <WalletButton onSetPassword={() => setPasswordPromptOpen(true)} />
           )}
-
-          {/* Mobile buttons - moved to mobile fixed header */}
         </div>
       </header>
 
@@ -1654,7 +1708,7 @@ function App() {
 
       {/* Main Content - Search Engine Style */}
       <main
-        className={`min-h-screen px-4 sm:px-6 lg:px-10 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:pb-6 flex justify-center transition-[padding] duration-300 ease-out ${filteredPrompts.length > 0 ? "pt-20 sm:pt-[20vh] lg:pt-[33vh]" : "pt-24 sm:pt-[25vh] lg:pt-[38vh]"}`}
+        className={`min-h-screen px-4 sm:px-6 lg:px-10 pb-[calc(11rem+env(safe-area-inset-bottom))] sm:pb-6 flex justify-center transition-[padding] duration-300 ease-out ${filteredPrompts.length > 0 ? "pt-20 sm:pt-[24vh] md:pt-[28vh] lg:pt-[33vh]" : "pt-24 sm:pt-[28vh] md:pt-[32vh] lg:pt-[38vh]"}`}
       >
         <div className="w-full max-w-2xl">
           {/* Search Container - Logo + Search + Results */}
@@ -1678,16 +1732,18 @@ function App() {
             >
               <SearchBar
                 ref={searchBarRef}
-                showArchived={showArchived}
-                setShowArchived={setShowArchived}
                 showDuplicates={showDuplicates}
                 setShowDuplicates={setShowDuplicates}
+                showRecent={showRecent}
+                setShowRecent={setShowRecent}
+                collectionsDialogOpen={collectionsDialogOpen}
+                setCollectionsDialogOpen={setCollectionsDialogOpen}
                 collections={collections}
                 showNewPromptButton={true}
                 onCreateNew={handleCreateNew}
                 connectedBottom={
                   !loading &&
-                  (filteredPrompts.length > 0 || showArchived || showDuplicates)
+                  (filteredPrompts.length > 0 || showArchived || showDuplicates || showRecent)
                 }
               />
 
@@ -1793,10 +1849,12 @@ function App() {
         <div className="fixed inset-x-0 bottom-0 z-[100] flex justify-center px-4 pb-[calc(env(safe-area-inset-bottom)+1.25rem)]">
           <div className="pointer-events-auto w-full max-w-2xl floating-searchbar-shadow rounded-lg">
             <SearchBar
-              showArchived={showArchived}
-              setShowArchived={setShowArchived}
               showDuplicates={showDuplicates}
               setShowDuplicates={setShowDuplicates}
+              showRecent={showRecent}
+              setShowRecent={setShowRecent}
+              collectionsDialogOpen={collectionsDialogOpen}
+              setCollectionsDialogOpen={setCollectionsDialogOpen}
               collections={collections}
               showNewPromptButton={true}
               onCreateNew={handleCreateNew}
@@ -1868,6 +1926,18 @@ function App() {
       />
 
       <HotkeysDialog open={hotkeysOpen} onOpenChange={setHotkeysOpen} />
+
+      {/* Hidden button triggers, dialogs are controlled via state */}
+      <div className="hidden">
+        <ComingSoonButton
+          open={comingSoonOpen}
+          onOpenChange={setComingSoonOpen}
+        />
+        <SyncButton
+          open={syncModalOpen}
+          onOpenChange={setSyncModalOpen}
+        />
+      </div>
     </div>
   );
 }
