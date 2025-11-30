@@ -10,7 +10,7 @@
 |-------|-------|
 | **Platform** | Desktop (Tauri) |
 | **Tech Stack** | React, Tauri, Turso (libSQL embedded) |
-| **Status** | Active Development (v0.1.5) |
+| **Status** | Active Development (v0.1.8) |
 | **Repo** | `pocket-prompt-ui` |
 
 ---
@@ -239,6 +239,14 @@ bun run tauri build  # Build production app
 ---
 
 ## Changelog
+
+### v0.1.8 (2025-11-30)
+- **Deep Link Protocol**: Changed from `promptvault://` to `pktprmpt://` for consistency
+- **Reliable Deep Links**: Implemented lazy plugin loader and setTimeout(0) pattern for Tauri 2.x
+- **Tauri v2 Detection**: Now detects both `__TAURI_INTERNALS__` and `__TAURI__` globals
+- **Instant Search Links**: Search deep links apply immediately without waiting for prompts to load
+- **macOS Install Script**: Added `bun run tauri:install-macos` for one-command build and protocol registration
+- **Documentation**: Comprehensive deep link troubleshooting guide
 
 ### v0.1.7 (2025-11-28)
 - **Fixed Icon Border**: Resolved gray halo artifact on macOS app icon
