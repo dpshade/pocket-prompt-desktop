@@ -8,5 +8,5 @@ Icon=$HOME/.local/share/icons/pocket-prompt.png
 Terminal=false
 Categories=Utility;
 StartupWMClass=pocket-prompt
-MimeType=x-scheme-handler/pocketprompt;
+MimeType=x-scheme-handler/pktprmpt;
 Keywords=ai;prompt;pocket;

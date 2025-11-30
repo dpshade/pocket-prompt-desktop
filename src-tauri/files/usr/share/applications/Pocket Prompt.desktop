@@ -8,4 +8,4 @@ Icon=pocket-prompt
 Terminal=false
 Categories=Utility;
 StartupWMClass=PocketPrompt
-MimeType=x-scheme-handler/pocketprompt;
+MimeType=x-scheme-handler/pktprmpt;

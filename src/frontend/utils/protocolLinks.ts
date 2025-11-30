@@ -1,6 +1,6 @@
 /**
  * Protocol URL Handler for Tauri Deep Links
- * Parses `promptvault://` URLs into app state parameters
+ * Parses `pktprmpt://` URLs into app state parameters
  */
 
 export interface ProtocolLinkParams {
@@ -25,8 +25,8 @@ export function parseProtocolUrl(url: string): ProtocolLinkParams {
       return { type: 'home' };
     }
 
-    if (!url.startsWith('promptvault://') && !url.startsWith('promptvault:')) {
-      console.error('[ProtocolLinks] URL does not start with promptvault protocol:', url.substring(0, 20));
+    if (!url.startsWith('pktprmpt://') && !url.startsWith('pktprmpt:')) {
+      console.error('[ProtocolLinks] URL does not start with pktprmpt protocol:', url.substring(0, 20));
       return { type: 'home' };
     }
 
@@ -104,10 +104,10 @@ export function parseProtocolUrl(url: string): ProtocolLinkParams {
 }
 
 /**
- * Generate a promptvault:// protocol URL from parameters
+ * Generate a pktprmpt:// protocol URL from parameters
  */
 export function generateProtocolUrl(params: ProtocolLinkParams): string {
-  const base = 'promptvault://';
+  const base = 'pktprmpt://';
   const searchParams = new URLSearchParams();
 
   switch (params.type) {

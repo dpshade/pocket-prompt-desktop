@@ -6,7 +6,7 @@ import { parseProtocolUrl } from './src/frontend/utils/protocolLinks.ts';
 console.log('=== Deep Link Application Test ===');
 
 // Simulate the deep link params that should be received
-const testUrl = 'promptvault://search?query=test&boolean=tag:important';
+const testUrl = 'pktprmpt://search?query=test&boolean=tag:important';
 const params = parseProtocolUrl(testUrl);
 
 console.log('\n1. Parsed deep link params:', params);

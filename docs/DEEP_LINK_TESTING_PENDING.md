@@ -14,10 +14,10 @@ Test and debug deep link search functionality in the Tauri application.
 
 ## What Needs Testing
 - 🔄 Web deep links: `http://localhost:5173/?q=searchterm&expr="tag1"%20AND%20"tag2"`
-- 🔄 Protocol deep links: `promptvault://search?query=searchterm&boolean="tag1"%20AND%20"tag2"`
-- 🔄 Prompt deep links: `promptvault://prompt/{prompt-id}`
-- 🔄 Collection deep links: `promptvault://collection/{collection-id}`
-- 🔄 Public prompt deep links: `promptvault://public/{txid}`
+- 🔄 Protocol deep links: `pktprmpt://search?query=searchterm&boolean="tag1"%20AND%20"tag2"`
+- 🔄 Prompt deep links: `pktprmpt://prompt/{prompt-id}`
+- 🔄 Collection deep links: `pktprmpt://collection/{collection-id}`
+- 🔄 Public prompt deep links: `pktprmpt://public/{txid}`
 
 ## Debugging Information
 - Deep link parsing logic is in `src/frontend/utils/deepLinks.ts` and `src/frontend/utils/protocolLinks.ts`

@@ -5,7 +5,7 @@ echo
 
 # 1. Check if protocol is registered
 echo "1. Protocol Registration:"
-xdg-mime query default x-scheme-handler/promptvault
+xdg-mime query default x-scheme-handler/pktprmpt
 echo
 
 # 2. Check desktop files
@@ -15,12 +15,12 @@ echo
 
 # 3. Test protocol URL parsing directly
 echo "3. Testing URL parsing:"
-echo "Testing: promptvault://search?q=test&expr=tag:example"
+echo "Testing: pktprmpt://search?q=test&expr=tag:example"
 echo
 
 # 4. Try to open protocol URL
 echo "4. Opening protocol URL:"
-xdg-open "promptvault://search?q=test&expr=tag:example" &
+xdg-open "pktprmpt://search?q=test&expr=tag:example" &
 sleep 2
 echo
 

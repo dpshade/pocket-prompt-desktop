@@ -5,7 +5,8 @@
 
 import type { BooleanExpression } from '@/shared/types/prompt';
 import { expressionToString, parseBooleanExpression } from '@/core/search/boolean';
-import { isTauri, generateProtocolUrl } from './protocolLinks';
+import { generateProtocolUrl } from './protocolLinks';
+import { isTauriEnvironment } from './tauri-deep-link-loader';
 
 export interface DeepLinkParams {
   /** Search query text */
@@ -126,10 +127,10 @@ export function urlParamToExpression(param: string): BooleanExpression | null {
 
 /**
  * Get a shareable link for a specific prompt
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getPromptShareLink(promptId: string, archived = false): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({ type: 'prompt', id: promptId, archived });
   }
   return generateShareableUrl({ prompt: promptId, archived });
@@ -137,10 +138,10 @@ export function getPromptShareLink(promptId: string, archived = false): string {
 
 /**
  * Get a shareable link for a search query
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getSearchShareLink(query: string, expression?: BooleanExpression): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({
       type: 'search',
       query,
@@ -155,10 +156,10 @@ export function getSearchShareLink(query: string, expression?: BooleanExpression
 
 /**
  * Get a shareable link for a boolean expression filter
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getExpressionShareLink(expression: BooleanExpression): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({ type: 'search', expression: expressionToString(expression) });
   }
   return generateShareableUrl({ expr: expressionToString(expression) });
@@ -166,10 +167,10 @@ export function getExpressionShareLink(expression: BooleanExpression): string {
 
 /**
  * Get a shareable link for a collection
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getCollectionShareLink(collectionId: string): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({ type: 'collection', id: collectionId });
   }
   return generateShareableUrl({ collection: collectionId });
@@ -178,10 +179,10 @@ export function getCollectionShareLink(collectionId: string): string {
 /**
  * Get a public shareable link for a prompt by Arweave TxID
  * This link works without wallet connection for public prompts
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getPublicPromptShareLink(txId: string): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({ type: 'public', id: txId });
   }
   return generateShareableUrl({ txid: txId });
@@ -189,10 +190,10 @@ export function getPublicPromptShareLink(txId: string): string {
 
 /**
  * Get a shareable link for a Turso shared prompt
- * Returns promptvault:// URL in Tauri, web URL otherwise
+ * Returns pktprmpt:// URL in Tauri, web URL otherwise
  */
 export function getTursoSharedPromptLink(shareToken: string): string {
-  if (isTauri()) {
+  if (isTauriEnvironment()) {
     return generateProtocolUrl({ type: 'shared', id: shareToken });
   }
   const url = new URL(window.location.origin);

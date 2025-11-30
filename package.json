@@ -13,7 +13,9 @@
     "test:run": "vitest run --config config/vitest.config.ts",
     "test:coverage": "vitest run --coverage --config config/vitest.config.ts",
     "tauri:build": "bun run tauri build",
-    "install-local": "pkill pocket-prompt 2>/dev/null || true && bunx tauri build && mkdir -p ~/.local/bin ~/.local/share/icons ~/.local/share/applications && cp src-tauri/target/release/pocket-prompt ~/.local/bin/ && cp src-tauri/icons/128x128.png ~/.local/share/icons/pocket-prompt.png && envsubst < src-tauri/files/pocket-prompt-local.desktop > ~/.local/share/applications/pocket-prompt.desktop && update-desktop-database ~/.local/share/applications 2>/dev/null || true && echo 'Installed pocket-prompt to ~/.local/bin/ with desktop entry'"
+    "install-local": "pkill pocket-prompt 2>/dev/null || true && bunx tauri build && mkdir -p ~/.local/bin ~/.local/share/icons ~/.local/share/applications && cp src-tauri/target/release/pocket-prompt ~/.local/bin/ && cp src-tauri/icons/128x128.png ~/.local/share/icons/pocket-prompt.png && envsubst < src-tauri/files/pocket-prompt-local.desktop > ~/.local/share/applications/pocket-prompt.desktop && update-desktop-database ~/.local/share/applications 2>/dev/null || true && echo 'Installed pocket-prompt to ~/.local/bin/ with desktop entry'",
+    "tauri:clean-build-macos": "pkill -f 'Pocket Prompt' 2>/dev/null || true; rm -rf dist src-tauri/target/debug && bun run build && bunx tauri build --debug",
+    "tauri:install-macos": "pkill -f 'Pocket Prompt' 2>/dev/null || true; rm -rf dist src-tauri/target/debug && bun run build && bunx tauri build --debug && cp -R 'src-tauri/target/debug/bundle/macos/Pocket Prompt.app' '/Applications/Pocket Prompt.app' && /System/Library/Frameworks/CoreServices.framework/Versions/A/Frameworks/LaunchServices.framework/Versions/A/Support/lsregister -f '/Applications/Pocket Prompt.app' && echo 'Installed to /Applications and registered pktprmpt:// scheme'"
   },
   "dependencies": {
     "@cloudworxx/tauri-plugin-mac-rounded-corners": "^1.1.1",

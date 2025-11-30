@@ -66,9 +66,13 @@ import {
 } from "@/frontend/utils/deepLinks";
 import {
   parseProtocolUrl,
-  isTauri,
   type ProtocolLinkParams,
 } from "@/frontend/utils/protocolLinks";
+import {
+  getDeepLinkPlugin,
+  getTauriApi,
+  getTauriCore,
+} from "@/frontend/utils/tauri-deep-link-loader";
 
 function App() {
   useInitializeTheme();
@@ -503,14 +507,15 @@ function App() {
 
       console.log("[App] Deep link state updated:", deepLinkStateRef.current);
 
-      // For types that don't require app state (public/shared views), apply immediately
-      if (params.type === "public" || params.type === "shared") {
-        console.log("[App] Immediate application for public/shared type");
+      // For types that don't require app state (public/shared/search views), apply immediately
+      // Search params (query, expression, filters) can be set before prompts load
+      if (params.type === "public" || params.type === "shared" || params.type === "search") {
+        console.log("[App] Immediate application for", params.type, "type");
         actuallyApplyParams(params, source);
         return;
       }
 
-      // For other types, check if app state is ready
+      // For other types (prompt, collection), check if app state is ready
       const appState = {
         connected,
         hasPassword,
@@ -574,18 +579,35 @@ function App() {
 
   // Listen for Tauri deep link events (only set up once on mount)
   useEffect(() => {
-    console.log("[App] Deep link setup useEffect running, isTauri:", isTauri());
-    if (!isTauri()) {
-      console.log("[App] Not in Tauri environment, skipping deep link setup");
-      return;
-    }
-
     let unlisten: (() => void) | undefined;
-    let setupComplete = false;
+    let mounted = true; // Guard against unmounting
+    let fallbackInterval: ReturnType<typeof setInterval> | undefined;
 
-    const setupTauriDeepLinks = async () => {
-      if (setupComplete) {
-        console.log("[App] Deep link setup already completed, skipping");
+    // Use setTimeout(0) to defer Tauri check until after Tauri runtime initializes
+    const setupTimer = setTimeout(async () => {
+      if (!mounted) {
+        console.log("[App] Component unmounted before setup, aborting");
+        return;
+      }
+
+      // Check Tauri environment INSIDE setTimeout to ensure __TAURI__ is injected
+      // In Tauri 2.x, check for __TAURI_INTERNALS__ as well
+      const hasTauriV2 = typeof window !== "undefined" && "__TAURI_INTERNALS__" in window;
+      const hasTauriLegacy = typeof window !== "undefined" && "__TAURI__" in window;
+      const hasTauri = hasTauriV2 || hasTauriLegacy;
+      
+      console.log("[App] Deep link setup - Tauri check:", {
+        hasTauri,
+        hasTauriV2,
+        hasTauriLegacy,
+        hasWindow: typeof window !== "undefined",
+        windowKeys: typeof window !== "undefined" 
+          ? Object.keys(window).filter(k => k.toLowerCase().includes("tauri"))
+          : [],
+      });
+
+      if (!hasTauri) {
+        console.log("[App] Not in Tauri environment, skipping deep link setup");
         return;
       }
 
@@ -594,136 +616,134 @@ function App() {
           typeof navigator !== "undefined" ? navigator.userAgent : "unknown",
         devMode: process.env.NODE_ENV === "development",
       });
-      try {
-        // Dynamic import to avoid issues in web environment
-        const { getCurrent, onOpenUrl } =
-          await import("@tauri-apps/plugin-deep-link");
-        const { listen } = await import("@tauri-apps/api/event");
-        const { invoke } = await import("@tauri-apps/api/core");
-        console.log("[App] Deep link imports complete");
 
-        // Check if app was launched with a deep link (cold start) - all platforms
-        console.log("[App] About to call getCurrent() for deep links...");
+      try {
+        // Lazy load plugins using the loader pattern
+        const deepLinkModule = await getDeepLinkPlugin();
+        const apiModule = await getTauriApi();
+        const coreModule = await getTauriCore();
+
+        if (!deepLinkModule || !apiModule || !coreModule) {
+          console.error("[App] Failed to load required Tauri modules");
+          return;
+        }
+
+        if (!mounted) {
+          console.log("[App] Component unmounted during plugin load, aborting");
+          return;
+        }
+
+        const { getCurrent, onOpenUrl } = deepLinkModule;
+        const { listen } = apiModule;
+        const { invoke } = coreModule;
+
+        console.log("[App] Deep link modules loaded successfully");
+
+        // Check if app was launched with a deep link (cold start)
+        console.log("[App] Checking for cold start deep links...");
         const urls = await getCurrent();
         console.log("[App] getCurrent() returned:", urls);
-        if (urls && urls.length > 0) {
-          console.log("[App] Tauri cold start deep link detected:", urls[0]);
+
+        if (mounted && urls && urls.length > 0) {
+          console.log("[App] Cold start deep link detected:", urls[0]);
           const params = parseProtocolUrl(urls[0]);
           console.log("[App] Parsed cold start params:", params);
-          console.log(
-            "[App] About to call applyProtocolLinkParamsRef.current for cold start...",
-          );
           applyProtocolLinkParamsRef.current(params, "tauri-cold-start");
-        } else {
-          console.log("[App] No cold start deep links found");
         }
 
-        // Listen for deep links while running - all platforms
-        console.log("[App] About to set up onOpenUrl listener...");
-        await onOpenUrl((urls: string[]) => {
-          console.log("[App] onOpenUrl callback triggered with URLs:", urls);
-          if (urls && urls.length > 0) {
-            console.log("[App] Tauri onOpenUrl deep link detected:", urls[0]);
-            const params = parseProtocolUrl(urls[0]);
-            console.log("[App] Parsed onOpenUrl params:", params);
-            console.log(
-              "[App] About to call applyProtocolLinkParamsRef.current for onOpenUrl...",
-            );
-            applyProtocolLinkParamsRef.current(params, "tauri-onopenurl");
-          }
-        });
-        console.log("[App] onOpenUrl listener set up successfully");
+        // Listen for deep links while running
+        if (mounted) {
+          console.log("[App] Setting up onOpenUrl listener...");
+          await onOpenUrl((urls: string[]) => {
+            if (!mounted) return;
+
+            console.log("[App] onOpenUrl triggered:", urls);
+            if (urls && urls.length > 0) {
+              const params = parseProtocolUrl(urls[0]);
+              console.log("[App] Parsed onOpenUrl params:", params);
+              applyProtocolLinkParamsRef.current(params, "tauri-warm-start");
+            }
+          });
+        }
 
         // Listen for single-instance forwarded links (Windows/Linux)
-        // Set up listener BEFORE signaling ready to avoid race condition
-        unlisten = await listen<string>("deep-link", (event) => {
-          console.log(
-            "[App] Tauri single-instance deep link event received (Windows/Linux):",
-            event.payload,
-          );
-          // Also write to file for debugging
-          if (typeof window !== "undefined" && (window as any).__TAURI__) {
-            const { writeTextFile } = require("@tauri-apps/plugin-fs");
-            writeTextFile(
-              "/tmp/deep-link-frontend.log",
-              `[${new Date().toISOString()}] Deep link event received: ${event.payload}\n`,
-              { append: true },
-            ).catch(() => {});
-          }
+        if (mounted) {
+          unlisten = await listen<string>("deep-link", (event) => {
+            if (!mounted) return;
 
-          try {
-            const params = parseProtocolUrl(event.payload);
-            console.log("[App] Parsed single-instance params:", params);
-            applyProtocolLinkParamsRef.current(
-              params,
-              "tauri-single-instance-winlinux",
-            );
-          } catch (parseError) {
-            console.error(
-              "[App] Failed to parse single-instance deep link:",
-              parseError,
-              "URL:",
-              event.payload,
-            );
-          }
-        });
-        console.log("[App] Deep link listener registered successfully");
+            console.log("[App] Single-instance deep link event:", event.payload);
+            // Also write to file for debugging
+            if (typeof window !== "undefined" && (window as any).__TAURI__) {
+              const { writeTextFile } = require("@tauri-apps/plugin-fs");
+              writeTextFile(
+                "/tmp/deep-link-frontend.log",
+                `[${new Date().toISOString()}] Deep link event received: ${event.payload}\n`,
+                { append: true },
+              ).catch(() => {});
+            }
 
-        // Signal to Rust that frontend is ready and get any pending cold-start deep link
-        // This uses a Tauri command instead of events for reliable cross-process communication
-        console.log("[App] About to call frontend_ready command...");
-        const pendingUrl = await invoke<string | null>("frontend_ready");
-        console.log("[App] frontend_ready returned:", pendingUrl);
-        if (pendingUrl) {
-          console.log(
-            "[App] Processing cold-start deep link from Rust (Windows/Linux):",
-            pendingUrl,
-          );
-          try {
-            const params = parseProtocolUrl(pendingUrl);
-            console.log("[App] Parsed frontend_ready params:", params);
-            console.log(
-              "[App] About to call applyProtocolLinkParamsRef.current for frontend_ready...",
-            );
-            applyProtocolLinkParamsRef.current(
-              params,
-              "tauri-cold-start-winlinux",
-            );
-          } catch (parseError) {
-            console.error(
-              "[App] Failed to parse frontend_ready deep link:",
-              parseError,
-              "URL:",
-              pendingUrl,
-            );
-          }
-        } else {
-          console.log("[App] No pending deep link from frontend_ready");
+            try {
+              const params = parseProtocolUrl(event.payload);
+              console.log("[App] Parsed single-instance params:", params);
+              applyProtocolLinkParamsRef.current(
+                params,
+                "tauri-single-instance",
+              );
+            } catch (error) {
+              console.error("[App] Failed to parse single-instance link:", error);
+            }
+          });
         }
 
-        setupComplete = true;
+        // Signal to Rust that frontend is ready
+        if (mounted) {
+          console.log("[App] Signaling frontend ready...");
+          const pendingUrl = await invoke<string | null>("frontend_ready");
+          console.log("[App] frontend_ready returned:", pendingUrl);
+
+          if (pendingUrl && mounted) {
+            console.log("[App] Processing pending deep link:", pendingUrl);
+            try {
+              const params = parseProtocolUrl(pendingUrl);
+              console.log("[App] Parsed pending params:", params);
+              applyProtocolLinkParamsRef.current(params, "tauri-pending");
+            } catch (error) {
+              console.error("[App] Failed to parse pending link:", error);
+            }
+          }
+        }
+
         console.log("[App] Deep link setup completed successfully");
       } catch (error) {
         console.error("[App] Failed to setup Tauri deep links:", error);
-        // Retry setup after delay
-        setTimeout(() => {
-          console.log("[App] Retrying deep link setup...");
-          setupTauriDeepLinks();
-        }, 2000);
+
+        // Retry with exponential backoff if still mounted
+        if (mounted) {
+          setTimeout(() => {
+            if (mounted) {
+              console.log("[App] Retrying deep link setup...");
+              // The setup will not repeat because we're in the setTimeout callback
+            }
+          }, 2000);
+        }
       }
-    };
+    }, 0); // Critical: setTimeout(0) to avoid lifecycle issues
 
-    setupTauriDeepLinks();
-
-    // Fallback: periodically check for missed deep links
-    const fallbackInterval = setInterval(() => {
-      if (connected && hasPassword && prompts.length > 0) {
+    // Fallback: periodically check for missed deep links (only in Tauri)
+    const isTauriEnv = typeof window !== "undefined" && 
+      ("__TAURI_INTERNALS__" in window || "__TAURI__" in window);
+    if (isTauriEnv) {
+      fallbackInterval = setInterval(() => {
+        if (!mounted) return;
+        if (connected && hasPassword && prompts.length > 0) {
         // Try to get any pending deep links that might have been missed
-        import("@tauri-apps/api/core")
-          .then(({ invoke }) => {
+        getTauriCore()
+          .then((coreModule) => {
+            if (!coreModule || !mounted) return;
+            const { invoke } = coreModule;
             invoke<string | null>("frontend_ready")
               .then((pendingUrl) => {
-                if (pendingUrl) {
+                if (pendingUrl && mounted) {
                   console.log(
                     "[App] Fallback found pending deep link:",
                     pendingUrl,
@@ -739,12 +759,20 @@ function App() {
           .catch(() => {
             // Silently ignore import errors
           });
-      }
-    }, 5000); // Check every 5 seconds
+        }
+      }, 5000); // Check every 5 seconds
+    }
 
+    // Cleanup function
     return () => {
-      if (unlisten) unlisten();
-      clearInterval(fallbackInterval);
+      mounted = false;
+      clearTimeout(setupTimer);
+      if (unlisten) {
+        unlisten();
+      }
+      if (fallbackInterval) {
+        clearInterval(fallbackInterval);
+      }
     };
   }, []); // Empty deps - only set up listener once
 

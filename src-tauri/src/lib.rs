@@ -41,7 +41,7 @@ pub fn run() {
             // Forward deep link args to running instance
             if let Some(url) = args.get(1) {
                 log::info!("[SingleInstance] Found arg: {}", url);
-                if url.starts_with("promptvault://") {
+                if url.starts_with("pktprmpt://") {
                     log::info!("[SingleInstance] Forwarding deep link: {}", url);
 
                     // Try multiple times with delays to ensure frontend receives the event
@@ -99,13 +99,13 @@ pub fn run() {
             {
                 log::info!("[DeepLink] Development mode detected - ensuring protocol registration");
                 // In development, also try to register via alternative method
-                if let Err(e) = app.deep_link().register("promptvault") {
+                if let Err(e) = app.deep_link().register("pktprmpt") {
                     log::warn!(
-                        "Failed to register promptvault scheme specifically: {:?}",
+                        "Failed to register pktprmpt scheme specifically: {:?}",
                         e
                     );
                 } else {
-                    log::info!("promptvault scheme registered successfully");
+                    log::info!("pktprmpt scheme registered successfully");
                 }
             }
 
@@ -115,7 +115,7 @@ pub fn run() {
             log::info!("[DeepLink] CLI args: {:?}", args);
             if let Some(url) = args.get(1).cloned() {
                 log::info!("[DeepLink] Found URL arg: {}", url);
-                if url.starts_with("promptvault://") {
+                if url.starts_with("pktprmpt://") {
                     log::info!("[DeepLink] Cold start with URL, storing for later: {}", url);
                     if let Ok(mut pending) = app.state::<PendingDeepLink>().0.lock() {
                         *pending = Some(url.clone());
@@ -124,7 +124,7 @@ pub fn run() {
                         log::error!("[DeepLink] Failed to lock pending state");
                     }
                 } else {
-                    log::info!("[DeepLink] URL does not start with promptvault://, ignoring");
+                    log::info!("[DeepLink] URL does not start with pktprmpt://, ignoring");
                 }
             } else {
                 log::info!("[DeepLink] No URL argument found");

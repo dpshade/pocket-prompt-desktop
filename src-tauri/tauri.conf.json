@@ -34,7 +34,7 @@
     },
     "deep-link": {
       "desktop": {
-        "schemes": ["pocketprompt"]
+        "schemes": ["pktprmpt"]
       }
     }
   },
