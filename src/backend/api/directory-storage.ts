@@ -15,6 +15,91 @@ import { open } from '@tauri-apps/plugin-dialog';
 import { parseMarkdownPrompt, type ImportedPrompt } from '@/shared/utils/import';
 import type { Prompt } from '@/shared/types/prompt';
 
+/**
+ * Directories to ignore during recursive scanning.
+ * Common version control, build artifacts, and editor directories.
+ */
+const IGNORED_DIRS = new Set([
+  '.git',
+  '.svn',
+  '.hg',
+  'node_modules',
+  '.obsidian',
+  '.vscode',
+  '.idea',
+  'dist',
+  'build',
+  '.next',
+  '.turbo',
+  '.cache',
+  '__pycache__',
+]);
+
+/** Files to ignore (not directories) */
+const IGNORED_FILES = new Set([
+  '.DS_Store',
+  'Thumbs.db',
+  '.gitignore',
+  '.gitkeep',
+]);
+
+/**
+ * Check if a filename has a markdown extension (case-insensitive)
+ */
+function isMarkdownFile(filename: string): boolean {
+  return filename.toLowerCase().endsWith('.md');
+}
+
+/**
+ * Check if a path segment should be ignored
+ */
+function shouldIgnorePath(name: string, isDirectory: boolean): boolean {
+  if (isDirectory) {
+    return IGNORED_DIRS.has(name) || name.startsWith('.');
+  }
+  return IGNORED_FILES.has(name);
+}
+
+/**
+ * Recursively read all markdown files from a directory and its subdirectories.
+ * Returns an array of absolute file paths.
+ */
+async function readDirRecursive(directoryPath: string): Promise<string[]> {
+  const markdownFiles: string[] = [];
+
+  async function walkDir(currentPath: string): Promise<void> {
+    try {
+      const entries = await readDir(currentPath);
+
+      for (const entry of entries) {
+        if (!entry.name) continue;
+
+        const fullPath = `${currentPath}/${entry.name}`;
+        const isDirectory = entry.isDirectory;
+
+        // Skip ignored paths
+        if (shouldIgnorePath(entry.name, isDirectory ?? false)) {
+          continue;
+        }
+
+        if (isDirectory) {
+          // Recurse into subdirectory
+          await walkDir(fullPath);
+        } else if (isMarkdownFile(entry.name)) {
+          // Add markdown file to results
+          markdownFiles.push(fullPath);
+        }
+      }
+    } catch (error) {
+      console.warn(`[DirectoryStorage] Failed to read directory ${currentPath}:`, error);
+      // Continue with other directories even if one fails
+    }
+  }
+
+  await walkDir(directoryPath);
+  return markdownFiles;
+}
+
 // Event listeners for directory changes
 type DirectoryChangeListener = (prompts: Prompt[]) => void;
 const changeListeners: Set<DirectoryChangeListener> = new Set();
@@ -100,20 +185,17 @@ export async function selectDirectory(): Promise<string | null> {
 }
 
 /**
- * Read all valid prompts from a directory
+ * Read all valid prompts from a directory (recursively scans subdirectories)
  */
 export async function readPromptsFromDirectory(directoryPath: string): Promise<Prompt[]> {
   const prompts: Prompt[] = [];
 
   try {
-    const entries = await readDir(directoryPath);
+    // Get all markdown files recursively
+    const markdownFiles = await readDirRecursive(directoryPath);
+    console.log(`[DirectoryStorage] Found ${markdownFiles.length} markdown files in ${directoryPath}`);
 
-    for (const entry of entries) {
-      // Only process .md files
-      if (!entry.name?.endsWith('.md')) continue;
-
-      const filePath = `${directoryPath}/${entry.name}`;
-
+    for (const filePath of markdownFiles) {
       try {
         const content = await readTextFile(filePath);
         const result = parseMarkdownPrompt(content);
@@ -199,20 +281,16 @@ export async function deletePromptFromDirectory(filePath: string): Promise<void>
 }
 
 /**
- * Find the file path for a prompt by its ID
+ * Find the file path for a prompt by its ID (searches recursively)
  */
 export async function findPromptFilePath(
   directoryPath: string,
   promptId: string
 ): Promise<string | null> {
   try {
-    const entries = await readDir(directoryPath);
+    const markdownFiles = await readDirRecursive(directoryPath);
 
-    for (const entry of entries) {
-      if (!entry.name?.endsWith('.md')) continue;
-
-      const filePath = `${directoryPath}/${entry.name}`;
-
+    for (const filePath of markdownFiles) {
       try {
         const content = await readTextFile(filePath);
         const result = parseMarkdownPrompt(content);
@@ -272,18 +350,41 @@ export async function watchDirectory(
 
   let unsubscribeWatch: (() => void) | null = null;
 
-  // Try native file watching first
+  /**
+   * Check if a file event path should be processed.
+   * Filters out ignored directories and non-markdown files.
+   */
+  const shouldProcessEvent = (eventPath: string): boolean => {
+    // Check if path contains any ignored directory
+    const pathSegments = eventPath.split('/');
+    for (const segment of pathSegments) {
+      if (IGNORED_DIRS.has(segment) || (segment.startsWith('.') && segment !== '.')) {
+        return false;
+      }
+    }
+    // Only process markdown files or directory events
+    const filename = pathSegments[pathSegments.length - 1];
+    return isMarkdownFile(filename) || !filename.includes('.');
+  };
+
+  // Try native file watching first (recursive for nested directories)
   try {
     const watchResult = await watch(
       directoryPath,
       (event) => {
-        console.log('[DirectoryStorage] File change detected:', event);
-        debouncedReload();
+        // Filter events to only process relevant changes
+        const eventPaths = event.paths || [];
+        const relevantPaths = eventPaths.filter((p: string) => p && shouldProcessEvent(p));
+        
+        if (relevantPaths.length > 0) {
+          console.log('[DirectoryStorage] File change detected:', relevantPaths);
+          debouncedReload();
+        }
       },
-      { recursive: false }
+      { recursive: true }
     );
     unsubscribeWatch = watchResult;
-    console.log('[DirectoryStorage] Native file watching enabled');
+    console.log('[DirectoryStorage] Native file watching enabled (recursive)');
   } catch (error) {
     // Fall back to polling if watch isn't available
     console.warn('[DirectoryStorage] Native watch not available, using polling:', error);
