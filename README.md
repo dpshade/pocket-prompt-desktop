@@ -11,7 +11,7 @@
 | **Platform** | Desktop (Tauri) |
 | **Tech Stack** | React, Tauri, Turso (libSQL embedded) |
 | **Status** | Active Development (v0.1.8) |
-| **Repo** | `pocket-prompt-ui` |
+| **Repo** | `pocket-prompt-desktop` |
 
 ---
 
@@ -34,7 +34,13 @@
 - **Dark Mode**: Built-in dark/light theme toggle
 - **Responsive Design**: Works on all screen sizes
 - **Platform Integration**: macOS rounded corners, proper window decorations
-- **Keyboard Navigation**: Full keyboard shortcuts support
+
+### Keyboard-First Design
+- **Global Hotkey**: `Cmd+Shift+P` summons the app from anywhere
+- **Arrow Navigation**: Navigate prompt list without touching the mouse
+- **Quick Actions**: `Enter` to copy, `Cmd+Enter` to open in LLM
+- **Instant Search**: Just start typing — search is always focused
+- **Escape to Close**: Dismiss overlay instantly
 
 ### Privacy & Security
 - **100% Local**: All data stored locally in embedded database
@@ -52,15 +58,15 @@
 ### Installation
 
 #### From Release (Recommended)
-1. Download the latest `.dmg` from [Releases](https://github.com/dpshade/pocket-prompt-ui/releases)
+1. Download the latest `.dmg` from [Releases](https://github.com/dpshade/pocket-prompt-desktop/releases)
 2. Drag `Pocket Prompt.app` to Applications
 3. Launch and grant accessibility permissions for global hotkey
 
 #### Build from Source
 ```bash
 # Clone the repository
-git clone https://github.com/dpshade/pocket-prompt-ui.git
-cd pocket-prompt-ui
+git clone https://github.com/dpshade/pocket-prompt-desktop.git
+cd pocket-prompt-desktop
 
 # Install dependencies
 bun install
@@ -88,11 +94,29 @@ bun run tauri build
 3. **Add Details**: Fill in title, description, tags, and content
 4. **Save**: Prompts are automatically saved to local database
 
-### Directory Sync (Obsidian Integration)
+### Directory Sync (Single Source of Truth)
+
+Keep all your prompts in one markdown folder and symlink it to multiple tools:
+
+```bash
+# Your single prompt directory
+~/prompts/
+├── coding/
+├── writing/
+└── workflows/
+
+# Symlink to AI coding tools
+ln -s ~/prompts ~/.claude/prompts
+ln -s ~/prompts ~/.config/opencode/prompts
+```
+
+**Setup in Pocket Prompt:**
 1. **Attach Directory**: Click "Attach Local Directory" in settings
-2. **Select Folder**: Choose your Obsidian vault or any markdown folder
+2. **Select Folder**: Choose your prompts folder (or Obsidian vault)
 3. **Real-Time Sync**: File changes are automatically detected and synced
 4. **Status Indicator**: Header shows "Linked" or "Syncing..." status
+
+This way you edit prompts once and they're available everywhere — Pocket Prompt, Claude Code, OpenCode, etc.
 
 ### Managing Prompts
 - **Search**: Use the search bar to find prompts by title, description, content, or tags
@@ -112,7 +136,7 @@ bun run tauri build
 ## Project Structure
 
 ```
-pocket-prompt-ui/
+pocket-prompt-desktop/
 ├── src/
 │   ├── frontend/              # React frontend
 │   │   ├── components/        # UI components
@@ -278,7 +302,7 @@ bun run tauri build  # Build production app
 - Hacker News
 - Developer communities (Reddit r/programming, r/productivity)
 
-**Key Message**: "The fastest way to use AI prompts. Free, local, private."
+**Key Message**: "Keyboard-first prompt manager. Summon anywhere, find instantly, inject into any app."
 
 ---
 
