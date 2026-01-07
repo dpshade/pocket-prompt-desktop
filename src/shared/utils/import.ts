@@ -1,5 +1,26 @@
 import matter from 'gray-matter';
 
+/**
+ * Simple hash function for generating stable IDs from content
+ */
+function hashContent(content: string): string {
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
+  }
+  return Math.abs(hash).toString(36);
+}
+
+/**
+ * Extract the first markdown heading from content
+ */
+function extractFirstHeading(content: string): string | null {
+  const match = content.match(/^#+\s+(.+)$/m);
+  return match ? match[1].trim() : null;
+}
+
 export interface ImportedPrompt {
   id: string;
   title: string;
@@ -32,31 +53,52 @@ export interface BatchImportResult {
 }
 
 /**
- * Parse a markdown file with frontmatter and extract prompt data
+ * Extract filename without extension from a path
  */
-export function parseMarkdownPrompt(fileContent: string): ImportResult {
+function getFileNameWithoutExtension(filePath: string): string {
+  const segments = filePath.split('/');
+  const filename = segments[segments.length - 1] || 'Untitled';
+  return filename.replace(/\.md$/i, '');
+}
+
+/**
+ * Parse a markdown file with frontmatter and extract prompt data.
+ * Accepts any valid markdown with frontmatter — missing fields get defaults.
+ * @param fileContent - The raw markdown file content
+ * @param filePath - Optional file path, used to derive title/id when not in frontmatter
+ */
+export function parseMarkdownPrompt(fileContent: string, filePath?: string): ImportResult {
   try {
     // Parse the markdown with frontmatter
     const { data, content } = matter(fileContent);
 
-    // Validate required fields
-    if (!data.id) {
+    // Must have frontmatter or content to be useful
+    const hasFrontmatter = Object.keys(data).length > 0;
+    const hasContent = content.trim().length > 0;
+    
+    if (!hasFrontmatter && !hasContent) {
       return {
         success: false,
-        error: 'Missing required field: id',
+        error: 'Empty file: no frontmatter and no content',
       };
     }
 
-    if (!data.title && !content.trim()) {
-      return {
-        success: false,
-        error: 'Missing required field: title (or content for fallback)',
-      };
-    }
+    // Generate stable ID from frontmatter or derive from content hash
+    // Priority: explicit id > name > title > content-based hash
+    const id = data.id 
+      ? String(data.id)
+      : data.name 
+        ? `name:${String(data.name)}`
+        : data.title
+          ? `title:${String(data.title).toLowerCase().replace(/\s+/g, '-').slice(0, 50)}`
+          : `content:${hashContent(content)}`;
 
-    // Extract and convert fields
-    const id = String(data.id);
-    const title = data.title || 'Untitled';
+    // Title: prefer explicit title, fall back to name, then first heading, then filename
+    const title = data.title 
+      || data.name 
+      || extractFirstHeading(content) 
+      || (filePath ? getFileNameWithoutExtension(filePath) : 'Untitled');
+    
     const description = data.description || '';
     const tags = Array.isArray(data.tags) ? data.tags : [];
 

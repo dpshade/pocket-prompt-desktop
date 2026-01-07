@@ -198,7 +198,7 @@ export async function readPromptsFromDirectory(directoryPath: string): Promise<P
     for (const filePath of markdownFiles) {
       try {
         const content = await readTextFile(filePath);
-        const result = parseMarkdownPrompt(content);
+        const result = parseMarkdownPrompt(content, filePath);
 
         if (result.success && result.prompt) {
           prompts.push(importedToPrompt(result.prompt, filePath));
@@ -293,7 +293,7 @@ export async function findPromptFilePath(
     for (const filePath of markdownFiles) {
       try {
         const content = await readTextFile(filePath);
-        const result = parseMarkdownPrompt(content);
+        const result = parseMarkdownPrompt(content, filePath);
 
         if (result.success && result.prompt && result.prompt.id === promptId) {
           return filePath;
