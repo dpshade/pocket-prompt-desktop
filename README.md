@@ -1,6 +1,6 @@
 # Pocket Prompt (Desktop)
 
-> A free, local-first prompt manager with paid cloud sync and premium prompt packs.
+> A free, local-first prompt manager for developers and power users.
 
 ---
 
@@ -37,9 +37,9 @@
 - **Keyboard Navigation**: Full keyboard shortcuts support
 
 ### Privacy & Security
-- **100% Local by Default**: All data stored locally in embedded database
-- **Optional Cloud Sync (Paid)**: Activates Turso replication to sync across devices
+- **100% Local**: All data stored locally in embedded database
 - **No Tracking**: No analytics, no telemetry
+- **Future**: Cloud sync across devices (if time permits)
 
 ---
 
@@ -190,24 +190,16 @@ bun run tauri build  # Build production app
 
 ---
 
-## Revenue Model
+## Potential Revenue Model (Future)
 
-| Metric | Value |
-|--------|-------|
-| Current Revenue | $0/mo |
-| Potential Revenue | $2,500/mo |
+> **Note**: Cloud sync and paid features are stretch goals if time permits. The tool works fully as a local-only app.
 
-### Revenue Sources
+1. **"Pro" Sync Subscription** — $4/mo or $40/yr (future)
+   - Sync across devices via Turso cloud replication
+   - Data format already supports this
 
-1. **"Pro" Sync Subscription** — **$4/mo** or **$40/yr**
-   - Gate: Sync across 3+ devices
-   - Activates Turso cloud replication
-   - No migration needed (data format ready)
-
-2. **Official Prompt Packs** — **$10-$25** per pack
-   - Example: "The Y-Combinator Application Pack", "The Senior React Dev Pack"
-   - One-time purchase unlocks JSON import
-   - Distributed as DLC in "Store" view
+2. **Official Prompt Packs** — $10-$25 per pack (future)
+   - Curated prompt packs as DLC
 
 ---
 
@@ -230,11 +222,11 @@ bun run tauri build  # Build production app
 
 ### 📋 Planned
 - [ ] **Pack Schema**: Define JSON structure for "Pack" (Title, Description, List of Prompts)
+
+### 🔮 Future (If Time Permits)
+- [ ] **Cloud Sync**: Turso replication for cross-device sync
 - [ ] **The "Store" View**: DLC marketplace for purchasable prompt packs
-- [ ] **48-hour Validation Test**:
-  1. Release Free Local Version on Twitter/Reddit
-  2. Include "Sync" waitlist modal: "$29/yr (50% off early bird)"
-  3. Success Metric: 50 active installs + 3 pre-orders
+- [ ] **Validation Test**: Release on Twitter/Reddit with sync waitlist
 
 ---
 
@@ -286,17 +278,16 @@ bun run tauri build  # Build production app
 - Hacker News
 - Developer communities (Reddit r/programming, r/productivity)
 
-**Key Message**: "The fastest way to use AI. Free forever locally. Sync if you need it."
+**Key Message**: "The fastest way to use AI prompts. Free, local, private."
 
 ---
 
-## Why This Asset
+## Why This Tool
 
-- **Distribution Advantage**: Free tools spread faster than paid ones. The free local version acts as marketing
-- **Turso Leverage**: Embedded replica technology solves offline-to-online sync out of the box
-- **Monetization Optionality**: Two revenue streams (Sync SaaS + Prompt Packs DLC)
-- **Low Risk**: App functions perfectly as local-only tool if cloud costs become prohibitive
-- **Privacy-First**: Appeals to developers who want full control over their data
+- **Privacy-First**: Full control over your data, no cloud dependency
+- **Distribution**: Free local tool spreads faster than paid alternatives
+- **Low Risk**: Works perfectly as local-only (cloud sync optional future enhancement)
+- **Turso Ready**: Embedded replica tech makes future sync straightforward if needed
 
 ---
 
